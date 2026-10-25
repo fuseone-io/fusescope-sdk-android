@@ -195,8 +195,9 @@ These are the SDK's side of phase 3; the backend may still rename them.
 6. **Mapping upload** (assumed, configurable with `uploadPath`):
    `POST <endpoint>/api/v1/rum/applications/{applicationId}/mappings?release=<release>`, header
    `SigNoz-Api-Key: <Editor API key>` (as for source maps; the public RUM key is not used), `multipart/form-data`
-   with fields `release`, `package_name`, `variant`, `version_code`, `map_id` and the file part `file`
-   (`filename="mapping.txt"`, `text/plain`). Any 2xx is success.
+   with `release`, then the file part `file` (`filename="mapping.txt"`, `text/plain`), then
+   `package_name`, `variant`, `version_code` and `map_id`. The server reads the first part after `release` as
+   the mapping and answers 201 with `debugId` = `pg_map_id`; any 2xx is success.
 
 ## Gateway contract
 

@@ -51,27 +51,29 @@ object MappingUploader {
 
     fun upload(u: MappingUpload): UploadResult {
         val boundary = "fusescope-" + UUID.randomUUID()
-        val fields =
+        val details =
             buildMap {
-                put("release", u.release)
                 put("package_name", u.packageName)
                 put("variant", u.variant)
                 u.versionCode?.let { put("version_code", it.toString()) }
                 mapId(u.mapping)?.let { put("map_id", it) }
             }
+
+        fun field(
+            name: String,
+            value: String,
+        ) = "--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n"
+        // The file goes right after `release`: the FuseScope server reads the first other part as the mapping.
         val head =
-            buildString {
-                for ((name, value) in fields) {
-                    append("--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n")
-                }
-                append("--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"mapping.txt\"\r\n")
-                append("Content-Type: text/plain\r\n\r\n")
-            }
+            field("release", u.release) +
+                "--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"mapping.txt\"\r\n" +
+                "Content-Type: text/plain\r\n\r\n"
+        val tail = "\r\n" + details.entries.joinToString("") { (name, value) -> field(name, value) } + "--$boundary--\r\n"
         val body =
             HttpRequest.BodyPublishers.concat(
                 HttpRequest.BodyPublishers.ofString(head),
                 HttpRequest.BodyPublishers.ofFile(u.mapping.toPath()),
-                HttpRequest.BodyPublishers.ofString("\r\n--$boundary--\r\n"),
+                HttpRequest.BodyPublishers.ofString(tail),
             )
         val request =
             HttpRequest
