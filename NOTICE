@@ -1,0 +1,16 @@
+FuseScope Android SDK
+Copyright 2026 FuseOne
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This product depends on, and its published artifacts redistribute nothing but
+references to, software developed by The OpenTelemetry Authors
+(https://opentelemetry.io/), licensed under the Apache License, Version 2.0:
+
+  - OpenTelemetry Android (https://github.com/open-telemetry/opentelemetry-android),
+    which includes code donated by Splunk Inc.
+  - OpenTelemetry Java (https://github.com/open-telemetry/opentelemetry-java)
+  - OpenTelemetry Java Instrumentation
+    (https://github.com/open-telemetry/opentelemetry-java-instrumentation)
+
+Copyright The OpenTelemetry Authors.
