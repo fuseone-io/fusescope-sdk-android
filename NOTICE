@@ -3,8 +3,7 @@ Copyright 2026 FuseOne
 
 This product is licensed under the Apache License, Version 2.0 (see LICENSE).
 
-This product depends on, and its published artifacts redistribute nothing but
-references to, software developed by The OpenTelemetry Authors
+It is a distribution of, and depends on, software developed by The OpenTelemetry Authors
 (https://opentelemetry.io/), licensed under the Apache License, Version 2.0:
 
   - OpenTelemetry Android (https://github.com/open-telemetry/opentelemetry-android),
