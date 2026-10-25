@@ -17,12 +17,12 @@ Status: 0.x, built on upstream's alpha instrumentation; options may change befor
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("io.fusescope.android.mappings") version "0.1.0" // optional, uploads R8 mappings
+    id("io.fuseone.fusescope.android.mappings") version "0.1.0" // optional, uploads R8 mappings
 }
 
 dependencies {
-    implementation("io.fusescope:android:0.1.0")
-    implementation("io.fusescope:android-compose:0.1.0") // optional, Compose and Navigation views
+    implementation("io.fuseone.fusescope:android:0.1.0")
+    implementation("io.fuseone.fusescope:android-compose:0.1.0") // optional, Compose and Navigation views
 }
 ```
 
@@ -68,7 +68,7 @@ Requirements, inherited from OpenTelemetry Android 1.7.0:
 
 Calls made before collection starts are dropped, except `setUser`, which is applied on start.
 
-`io.fusescope:android-compose` adds `FuseScopeView(route)` (a composable that starts a view),
+`io.fuseone.fusescope:android-compose` adds `FuseScopeView(route)` (a composable that starts a view),
 `FuseScopeNavigationViews(navController)` and `NavController.trackFuseScopeViews()`, which start a view per
 Navigation destination named by its route template.
 
@@ -145,7 +145,7 @@ value. FuseScope can then filter sessions by user without storing who they are.
 ## Releases and R8 mappings
 
 `release` is the `service.version` resource attribute, and FuseScope retraces stack traces with the mapping
-uploaded for it. The `io.fusescope.android.mappings` plugin uploads `mapping.txt` after `assemble<Variant>` and
+uploaded for it. The `io.fuseone.fusescope.android.mappings` plugin uploads `mapping.txt` after `assemble<Variant>` and
 `bundle<Variant>` of every minified variant:
 
 ```kotlin
@@ -165,7 +165,7 @@ Without an endpoint, application id or key the upload is skipped with a warning,
 
 | Signal | Name | Key attributes |
 |---|---|---|
-| Resource | — | `service.name`, `service.version`, `deployment.environment.name`, `fusescope.rum.platform=android`, `fusescope.rum.application.id`, `app.package.name`, `fusescope.rum.android.version_code`, `telemetry.distro.name=io.fusescope:android`, `telemetry.distro.version`, `telemetry.sdk.*`, `device.*`, `os.*`, `android.os.api_level` |
+| Resource | — | `service.name`, `service.version`, `deployment.environment.name`, `fusescope.rum.platform=android`, `fusescope.rum.application.id`, `app.package.name`, `fusescope.rum.android.version_code`, `telemetry.distro.name=io.fuseone.fusescope:android`, `telemetry.distro.version`, `telemetry.sdk.*`, `device.*`, `os.*`, `android.os.api_level` |
 | Every span and log | — | `session.id`, `session.previous_id`, `fusescope.rum.view.route`, `user.id`, `app.screen.name`, `network.*` |
 | Span | `view` | `fusescope.rum.view.route`, `fusescope.rum.view.loading_type`, `fusescope.rum.view.navigation_type`; duration = time on screen |
 | Span | `GET`, `POST`, … | `http.request.method`, `url.full`, `http.response.status_code`, `server.*` |
@@ -208,14 +208,14 @@ These are the SDK's side of phase 3; the backend may still rename them.
 
 ## Compatibility
 
-| io.fusescope:android | FuseScope server | OpenTelemetry Android | OpenTelemetry Java |
+| io.fuseone.fusescope:android | FuseScope server | OpenTelemetry Android | OpenTelemetry Java |
 |---|---|---|---|
 | 0.1.x | to be filled when the Android gateway ships | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 
 ## Contributing
 
-JDK 21 and the Android SDK (platform 37). Repository layout: `sdk/` (`io.fusescope:android`), `compose/`
-(`io.fusescope:android-compose`), `gradle-plugin/` (`io.fusescope.android.mappings`, an included build),
+JDK 21 and the Android SDK (platform 37). Repository layout: `sdk/` (`io.fuseone.fusescope:android`), `compose/`
+(`io.fuseone.fusescope:android-compose`), `gradle-plugin/` (`io.fuseone.fusescope.android.mappings`, an included build),
 `sample/`.
 
 ```bash
@@ -229,7 +229,7 @@ End to end on an emulator, against a local stand-in for the gateway (never a rea
 ```bash
 uv run --no-project --with opentelemetry-proto==1.39.1 scripts/stub_gateway.py --port 4399 --out build/stub
 FUSESCOPE_API_KEY=stub ./gradlew :sample:installRelease -Pfusescope.sample.uploadMapping=true
-adb shell am start -n io.fusescope.sample/.MainActivity --es action error   # request, crash, anr, details, compose
+adb shell am start -n io.fuseone.fusescope.sample/.MainActivity --es action error   # request, crash, anr, details, compose
 ```
 
 The sample sends to `http://10.0.2.2:4399` (the host from the emulator); the stub writes the decoded OTLP
@@ -245,14 +245,14 @@ requests to `build/stub/*.jsonl` and the mapping uploads to `build/stub/mappings
 ## Releasing
 
 `.github/workflows/release.yml` runs on manual dispatch only and does nothing until it is enabled. It checks,
-publishes `io.fusescope:android`, `io.fusescope:android-compose` and `io.fusescope:android-mappings-gradle-plugin`
+publishes `io.fuseone.fusescope:android`, `io.fuseone.fusescope:android-compose` and `io.fuseone.fusescope:android-mappings-gradle-plugin`
 (with its plugin marker) to Maven Central through the Central Portal, GPG-signed as Central requires, and
 attests build provenance with Sigstore (GitHub artifact attestations).
 
 To enable it:
 
-1. Create a Central Portal account at <https://central.sonatype.com> and verify the `io.fusescope` namespace
-   (a DNS TXT record on `fusescope.io`; with another namespace, change `GROUP` in `gradle.properties`).
+1. Create a Central Portal account at <https://central.sonatype.com> and verify the `io.fuseone` namespace
+   (a DNS TXT record on `fuseone.io`; with another namespace, change `GROUP` in `gradle.properties`).
 2. Generate a Central Portal user token.
 3. Create a GPG key for signing and publish its public key to a key server Central checks
    (e.g. `keys.openpgp.org`).

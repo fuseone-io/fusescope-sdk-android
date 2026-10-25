@@ -25,8 +25,8 @@ gradlePlugin {
     vcsUrl.set("https://github.com/fuseone-io/fusescope-sdk-android")
     plugins {
         create("mappings") {
-            id = "io.fusescope.android.mappings"
-            implementationClass = "io.fusescope.android.mappings.FuseScopeMappingsPlugin"
+            id = "io.fuseone.fusescope.android.mappings"
+            implementationClass = "io.fuseone.fusescope.android.mappings.FuseScopeMappingsPlugin"
             displayName = "FuseScope R8 mapping upload"
             description = "Uploads R8/ProGuard mapping.txt files to FuseScope after release builds."
         }
