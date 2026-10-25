@@ -1,0 +1,52 @@
+name: release
+
+# Manual only, and inert until the Maven Central credentials exist: the job runs only when the
+# MAVEN_CENTRAL_ENABLED variable of the maven-central environment is true. See README › Releasing.
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish, e.g. 0.1.0
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    if: vars.MAVEN_CENTRAL_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    environment: maven-central
+    env:
+      ORG_GRADLE_PROJECT_VERSION_NAME: ${{ inputs.version }}
+      ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+      ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+      ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.SIGNING_KEY }}
+      ORG_GRADLE_PROJECT_signingInMemoryKeyId: ${{ secrets.SIGNING_KEY_ID }}
+      ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.SIGNING_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Check
+        run: |
+          ./gradlew ktlintCheck lintRelease testDebugUnitTest checkLicense :sample:assembleRelease
+          ./gradlew -p gradle-plugin ktlintCheck test validatePlugins
+      - name: Publish to Maven Central
+        run: |
+          ./gradlew :sdk:publishAndReleaseToMavenCentral :compose:publishAndReleaseToMavenCentral --no-configuration-cache
+          ./gradlew -p gradle-plugin publishAndReleaseToMavenCentral --no-configuration-cache
+      - name: Build provenance (Sigstore)
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            sdk/build/outputs/aar/sdk-release.aar
+            compose/build/outputs/aar/compose-release.aar
+            gradle-plugin/build/libs/*.jar
+      - run: echo "Published io.fusescope:android, android-compose and android-mappings-gradle-plugin ${{ inputs.version }}" >> "$GITHUB_STEP_SUMMARY"

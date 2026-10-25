@@ -1,0 +1,74 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Lint (ktlint, Android lint)
+        run: ./gradlew ktlintCheck lintRelease
+      - name: Unit tests
+        run: ./gradlew testDebugUnitTest
+      - name: Gradle plugin (lint, tests, validation)
+        run: ./gradlew -p gradle-plugin ktlintCheck test validatePlugins
+      - name: Licence check (runtime dependencies)
+        run: ./gradlew checkLicense
+      - name: Sample release build (R8)
+        run: ./gradlew :sample:assembleRelease
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            **/build/reports/
+            **/build/test-results/
+          retention-days: 7
+
+  instrumented:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - run: ./gradlew :sdk:assembleDebugAndroidTest
+      - name: Smoke test on an emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
+          script: ./gradlew :sdk:connectedDebugAndroidTest
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-reports
+          path: sdk/build/reports/androidTests/
+          retention-days: 7
