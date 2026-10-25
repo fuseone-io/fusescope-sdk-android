@@ -16,4 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "fusescope-sdk-android"
 
-include(":sdk")
+include(":sdk", ":compose")
