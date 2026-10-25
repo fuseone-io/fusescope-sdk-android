@@ -6,7 +6,13 @@ plugins {
     alias(libs.plugins.ktlint)
 }
 
-val sdkProperties = Properties().apply { rootDir.parentFile.resolve("gradle.properties").inputStream().use(::load) }
+val sdkProperties =
+    Properties().apply {
+        rootDir.parentFile
+            .resolve("gradle.properties")
+            .inputStream()
+            .use(::load)
+    }
 group = sdkProperties.getProperty("GROUP")
 version = providers.gradleProperty("VERSION_NAME").getOrElse(sdkProperties.getProperty("VERSION_NAME"))
 
