@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "io.fusescope.android"
+    namespace = "io.fuseone.fusescope.android"
     compileSdk = 37
 
     defaultConfig {

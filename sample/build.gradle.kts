@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    id("io.fusescope.android.mappings")
+    id("io.fuseone.fusescope.android.mappings")
 }
 
 fun setting(
@@ -10,11 +10,11 @@ fun setting(
 ): String = providers.gradleProperty("fusescope.sample.$name").getOrElse(default)
 
 android {
-    namespace = "io.fusescope.sample"
+    namespace = "io.fuseone.fusescope.sample"
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "io.fusescope.sample"
+        applicationId = "io.fuseone.fusescope.sample"
         minSdk = 26
         targetSdk = 36
         versionCode = 1

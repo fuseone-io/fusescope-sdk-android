@@ -49,4 +49,4 @@ jobs:
             sdk/build/outputs/aar/sdk-release.aar
             compose/build/outputs/aar/compose-release.aar
             gradle-plugin/build/libs/*.jar
-      - run: echo "Published io.fusescope:android, android-compose and android-mappings-gradle-plugin ${{ inputs.version }}" >> "$GITHUB_STEP_SUMMARY"
+      - run: echo "Published io.fuseone.fusescope:android, io.fuseone.fusescope:android-compose and io.fuseone.fusescope:android-mappings-gradle-plugin ${{ inputs.version }}" >> "$GITHUB_STEP_SUMMARY"

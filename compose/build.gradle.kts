@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "io.fusescope.android.compose"
+    namespace = "io.fuseone.fusescope.android.compose"
     compileSdk = 37
 
     defaultConfig {
