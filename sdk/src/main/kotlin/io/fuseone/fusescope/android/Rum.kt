@@ -19,7 +19,6 @@ import io.opentelemetry.api.logs.Severity
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
 import io.opentelemetry.exporter.otlp.http.logs.OtlpHttpLogRecordExporter
 import io.opentelemetry.exporter.otlp.http.trace.OtlpHttpSpanExporter
-import io.opentelemetry.instrumentation.okhttp.v3_0.OkHttpTelemetry
 import io.opentelemetry.sdk.OpenTelemetrySdk
 import io.opentelemetry.sdk.logs.export.LogRecordExporter
 import io.opentelemetry.sdk.resources.Resource
@@ -45,7 +44,6 @@ internal class Rum private constructor(
 ) {
     val openTelemetry: OpenTelemetry get() = otelRum.openTelemetry
     private val logger: Logger = otelRum.openTelemetry.logsBridge.get(SDK_NAME)
-    private val okHttp by lazy { OkHttpTelemetry.create(otelRum.openTelemetry) }
 
     fun setUser(id: String?) {
         state.userId = userId(id, config.hashUserId)
@@ -84,7 +82,7 @@ internal class Rum private constructor(
             .emit()
     }
 
-    fun callFactory(client: OkHttpClient): Call.Factory = okHttp.createCallFactory(client)
+    fun callFactory(client: OkHttpClient): Call.Factory = traceparentCallFactory(otelRum.openTelemetry, config.traceparentHosts, client)
 
     fun flush(timeoutMillis: Long = FLUSH_TIMEOUT_MS) {
         sdk.sdkTracerProvider.forceFlush().join(timeoutMillis, TimeUnit.MILLISECONDS)

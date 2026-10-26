@@ -1,8 +1,10 @@
 package io.fuseone.fusescope.android
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ResolvedConfigTest {
@@ -34,6 +36,29 @@ class ResolvedConfigTest {
     }
 
     @Test
+    fun `traceparent goes to the endpoint's host by default`() {
+        val hosts = resolveConfig(base).traceparentHosts
+        assertTrue(hosts.allows("fusescope.example.com"))
+        assertTrue(hosts.allows("FuseScope.Example.com"))
+        assertFalse(hosts.allows("api.example.com"))
+        assertTrue(resolveConfig(base.copy(endpoint = "http://[::1]:4399")).traceparentHosts.allows("::1"))
+    }
+
+    @Test
+    fun `traceparentHosts matches exact hosts, subdomain wildcards and star`() {
+        val hosts = resolveConfig(base.copy(traceparentHosts = listOf("api.example.com", "*.cdn.example.com", "[::1]"))).traceparentHosts
+        assertTrue(hosts.allows("API.example.com"))
+        assertTrue(hosts.allows("eu.cdn.example.com"))
+        assertTrue(hosts.allows("a.eu.cdn.example.com"))
+        assertTrue(hosts.allows("::1"))
+        assertFalse(hosts.allows("cdn.example.com"))
+        assertFalse(hosts.allows("evilapi.example.com"))
+        assertFalse(hosts.allows("fusescope.example.com"))
+        assertTrue(resolveConfig(base.copy(traceparentHosts = listOf("*"))).traceparentHosts.allows("anything.io"))
+        assertFalse(resolveConfig(base.copy(traceparentHosts = emptyList())).traceparentHosts.allows("fusescope.example.com"))
+    }
+
+    @Test
     fun `rejects invalid configuration`() {
         val invalid =
             listOf(
@@ -44,6 +69,12 @@ class ResolvedConfigTest {
                 base.copy(sessionSampleRate = 1.5),
                 base.copy(sessionSampleRate = Double.NaN),
                 base.copy(session = SessionConfig(inactivityTimeoutMillis = 0)),
+                base.copy(traceparentHosts = listOf("https://api.example.com")),
+                base.copy(traceparentHosts = listOf("api.example.com/v1")),
+                base.copy(traceparentHosts = listOf("api.example.com:443")),
+                base.copy(traceparentHosts = listOf("")),
+                base.copy(traceparentHosts = listOf("*.")),
+                base.copy(traceparentHosts = listOf("api*.example.com")),
             )
         for (c in invalid) assertThrows(c.toString(), IllegalArgumentException::class.java) { resolveConfig(c) }
     }
