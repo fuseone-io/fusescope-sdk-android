@@ -179,7 +179,7 @@ internal class Rum private constructor(
         ): Resource {
             val b = AndroidResource.createDefault(application).toBuilder()
             if (!c.installationId) b.removeIf { it.key == ResourceAttr.INSTALLATION_ID }
-            b.put(ResourceAttr.SERVICE_NAME, c.service)
+            if (c.service != null) b.put(ResourceAttr.SERVICE_NAME, c.service) else b.removeIf { it.key == ResourceAttr.SERVICE_NAME }
             c.release?.let { b.put(ResourceAttr.SERVICE_VERSION, it) }
             c.environment?.let { b.put(ResourceAttr.ENVIRONMENT, it) }
             versionCode(application)?.let { b.put(ResourceAttr.VERSION_CODE, it) }
