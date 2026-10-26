@@ -67,9 +67,9 @@ class ExportersTest {
             }.single()
         assertEquals("exception", log.eventName)
         assertEquals("anr", log.attributes.get(Attr.ERROR_SOURCE))
-        assertEquals(ANR_TYPE, log.attributes.get(Attr.EXCEPTION_TYPE))
+        assertEquals("ANR", log.attributes.get(Attr.EXCEPTION_TYPE))
         assertEquals(
-            "$ANR_TYPE: $ANR_MESSAGE\n\tat java.lang.Thread.sleep(Native Method)\n\tat a.b.c(SourceFile:3)",
+            "ANR: $ANR_MESSAGE\n\tat java.lang.Thread.sleep(Native Method)\n\tat a.b.c(SourceFile:3)",
             log.attributes.get(Attr.EXCEPTION_STACKTRACE),
         )
         assertEquals(Severity.ERROR, log.severity)

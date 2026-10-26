@@ -89,7 +89,7 @@ internal class RumLogExporter(
     override fun shutdown(): CompletableResultCode = delegate.shutdown()
 }
 
-internal const val ANR_TYPE = "ApplicationNotResponding"
+internal const val ANR_TYPE = "ANR"
 internal const val ANR_MESSAGE = "Application Not Responding: the main thread was blocked for at least 5 s"
 
 /** Upstream reports an ANR as bare frames; a Java-formatted trace lets the backend retrace it like a crash. */
