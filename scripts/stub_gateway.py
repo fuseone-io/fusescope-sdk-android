@@ -2,8 +2,8 @@
 
     uv run --with opentelemetry-proto==1.39.1 scripts/stub_gateway.py --port 4399 --out build/stub
 
-Writes every OTLP request as JSON lines to <out>/traces.jsonl and <out>/logs.jsonl, mapping uploads to
-<out>/mappings/, and calls to /api/* (with their traceparent header) to <out>/api.jsonl.
+Writes every OTLP request as JSON lines to <out>/traces.jsonl and <out>/logs.jsonl, each mapping upload to
+<out>/mappings/<applicationId>/<n>.multipart (its request line in <n>.txt), and calls to /api/* (with their traceparent header) to <out>/api.jsonl.
 """
 
 import argparse
@@ -62,8 +62,9 @@ def make_handler(out: pathlib.Path):
             if match:
                 target = out / "mappings" / match.group(1)
                 target.mkdir(parents=True, exist_ok=True)
-                (target / "request.txt").write_text(f"{self.path}\nSigNoz-Api-Key: {self.headers.get('SigNoz-Api-Key')}\n")
-                (target / "body.multipart").write_bytes(self.body())
+                n = len(list(target.glob("*.multipart"))) + 1
+                (target / f"{n}.txt").write_text(f"{self.path}\nSigNoz-Api-Key: {self.headers.get('SigNoz-Api-Key')}\n")
+                (target / f"{n}.multipart").write_bytes(self.body())
                 return self.reply(201)
             if path.startswith("/api/"):
                 return self.do_GET()
