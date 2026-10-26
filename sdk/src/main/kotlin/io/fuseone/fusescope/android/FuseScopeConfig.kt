@@ -8,7 +8,7 @@ package io.fuseone.fusescope.android
  * @property endpoint FuseScope base URL; data goes to `<endpoint>/rum/v1/traces` and `<endpoint>/rum/v1/logs`.
  * @property environment `deployment.environment.name`, e.g. `production`.
  * @property release `service.version`; defaults to the app's `versionName`. Must equal the release of the R8 mapping upload.
- * @property service `service.name`; defaults to [applicationId].
+ * @property service `service.name`; unset, the FuseScope gateway names the service after the application.
  * @property sessionSampleRate Share of sessions recorded, 0 to 1. Unsampled sessions send nothing and no `traceparent`.
  * @property requireConsent Collect nothing until [FuseScope.setConsent] is called with `true`.
  */

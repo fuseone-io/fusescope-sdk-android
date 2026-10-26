@@ -4,7 +4,7 @@ internal const val KEY_HEADER = "FuseScope-RUM-Key"
 
 internal data class ResolvedConfig(
     val applicationId: String,
-    val service: String,
+    val service: String?,
     val environment: String?,
     val release: String?,
     val tracesUrl: String,
@@ -35,7 +35,7 @@ internal fun resolveConfig(c: FuseScopeConfig): ResolvedConfig {
     val base = c.endpoint.trimEnd('/')
     return ResolvedConfig(
         applicationId = c.applicationId,
-        service = c.service?.takeIf { it.isNotBlank() } ?: c.applicationId,
+        service = c.service?.takeIf { it.isNotBlank() },
         environment = c.environment?.takeIf { it.isNotBlank() },
         release = c.release?.takeIf { it.isNotBlank() },
         tracesUrl = "$base/rum/v1/traces",

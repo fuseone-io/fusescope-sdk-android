@@ -2,6 +2,7 @@ package io.fuseone.fusescope.android
 
 import android.app.Activity
 import android.os.Looper
+import io.opentelemetry.api.common.AttributeKey
 import io.opentelemetry.proto.collector.logs.v1.ExportLogsServiceRequest
 import io.opentelemetry.proto.collector.trace.v1.ExportTraceServiceRequest
 import io.opentelemetry.proto.common.v1.KeyValue
@@ -99,6 +100,7 @@ class FuseScopeTest {
         assertEquals("android", resource.str("fusescope.rum.platform"))
         assertEquals("0199c0de-0000-7000-8000-000000000001", resource.str("fusescope.rum.application.id"))
         assertEquals("1.4.0", resource.str("service.version"))
+        assertNull(resource.str("service.name"))
         assertEquals("test", resource.str("deployment.environment.name"))
         assertEquals(RuntimeEnvironment.getApplication().packageName, resource.str("app.package.name"))
         assertEquals("io.fuseone.fusescope:android", resource.str("telemetry.distro.name"))
@@ -124,6 +126,15 @@ class FuseScopeTest {
         assertEquals("java.lang.IllegalStateException", error.attributesList.str("exception.type"))
         assertEquals("CheckoutActivity", error.attributesList.str("fusescope.rum.view.route"))
         assertEquals(sessionId, error.attributesList.str("session.id"))
+    }
+
+    @Test
+    fun `sends service_name only when configured`() {
+        val app = RuntimeEnvironment.getApplication()
+        val named = Rum.resource(app, resolveConfig(config().copy(service = "shop-android")))
+        assertEquals("shop-android", named.getAttribute(AttributeKey.stringKey("service.name")))
+        val unnamed = Rum.resource(app, resolveConfig(config()))
+        assertNull(unnamed.getAttribute(AttributeKey.stringKey("service.name")))
     }
 
     @Test

@@ -1,6 +1,7 @@
 package io.fuseone.fusescope.android
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
 import org.junit.Test
 
@@ -13,7 +14,7 @@ class ResolvedConfigTest {
         assertEquals("https://fusescope.example.com/rum/v1/traces", c.tracesUrl)
         assertEquals("https://fusescope.example.com/rum/v1/logs", c.logsUrl)
         assertEquals(mapOf("FuseScope-RUM-Key" to "rum_pub_x"), c.headers)
-        assertEquals("app-1", c.service)
+        assertNull(c.service)
         assertEquals(1.0, c.sessionSampleRate, 0.0)
         assertEquals(QueryPolicy.Allow(emptySet()), c.queryPolicy)
         assertEquals(true, c.hashUserId)
