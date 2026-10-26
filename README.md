@@ -17,12 +17,12 @@ Status: 0.1.0 beta, built on upstream's alpha instrumentation; options may chang
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("io.fuseone.fusescope.android.mappings") version "0.1.0-beta.1" // optional, uploads R8 mappings
+    id("io.fuseone.fusescope.android.mappings") version "0.1.0-beta.2" // optional, uploads R8 mappings
 }
 
 dependencies {
-    implementation("io.fuseone.fusescope:android:0.1.0-beta.1")
-    implementation("io.fuseone.fusescope:android-compose:0.1.0-beta.1") // optional, Compose and Navigation views
+    implementation("io.fuseone.fusescope:android:0.1.0-beta.2")
+    implementation("io.fuseone.fusescope:android-compose:0.1.0-beta.2") // optional, Compose and Navigation views
 }
 ```
 
@@ -228,7 +228,7 @@ What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/f
 | io.fuseone.fusescope:android | FuseScope server | OpenTelemetry Android | OpenTelemetry Java |
 |---|---|---|---|
 | 0.1.0-beta.1 | ≥ 0.155.0 | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
-| 0.1.0-beta.2 | ≥ 0.155.0 | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
+| 0.1.0-beta.2 | ≥ 0.156.0 (≥ 0.155.0 without per-build mappings) | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 
 ## Contributing
 
