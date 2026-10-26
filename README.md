@@ -10,21 +10,24 @@ plugin. It follows `@fusescope/browser` and [ADR 0003](https://github.com/fuseon
 **Homologated, not mandatory.** This is the tested and recommended path, but FuseScope accepts any OTLP client.
 Clients configured by hand only need the attributes under [Data](#data).
 
-Status: 0.x, built on upstream's alpha instrumentation; options may change before 1.0.
+Status: 0.1.0 beta, built on upstream's alpha instrumentation; options may change before 1.0.
 
 ## Install
 
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("io.fuseone.fusescope.android.mappings") version "0.1.0" // optional, uploads R8 mappings
+    id("io.fuseone.fusescope.android.mappings") version "0.1.0-beta.1" // optional, uploads R8 mappings
 }
 
 dependencies {
-    implementation("io.fuseone.fusescope:android:0.1.0")
-    implementation("io.fuseone.fusescope:android-compose:0.1.0") // optional, Compose and Navigation views
+    implementation("io.fuseone.fusescope:android:0.1.0-beta.1")
+    implementation("io.fuseone.fusescope:android-compose:0.1.0-beta.1") // optional, Compose and Navigation views
 }
 ```
+
+Everything is on Maven Central, the plugin included: add `mavenCentral()` to `pluginManagement.repositories` in
+`settings.gradle.kts`.
 
 ```kotlin
 class ShopApp : Application() {
@@ -37,7 +40,6 @@ class ShopApp : Application() {
                 key = "rum_pub_…",
                 endpoint = "https://fusescope.example.com",
                 environment = "production",
-                service = "shop-android",
             ),
         )
     }
@@ -76,13 +78,14 @@ Navigation destination named by its route template.
 
 | `FuseScopeConfig` | Default | |
 |---|---|---|
-| `applicationId` | required | RUM application id (a UUID) from FuseScope's Setup screen. Also `service.name` unless `service` is set. |
+| `applicationId` | required | RUM application id (a UUID) from FuseScope's Setup screen. |
 | `key` | required | Public, write-only key (`rum_pub_…`). Safe to ship in an APK. |
 | `endpoint` | required | FuseScope base URL. Data goes to `<endpoint>/rum/v1/traces` and `<endpoint>/rum/v1/logs`. |
-| `service` | `applicationId` | `service.name`. |
+| `service` | — | `service.name`. Unset, the gateway names the service after the FuseScope application. |
 | `environment` | — | `deployment.environment.name`. |
 | `release` | `versionName` | `service.version`. Must equal the `release` of the mapping upload, which defaults to `versionName` too. |
 | `sessionSampleRate` | `1.0` | Share of sessions recorded, 0–1. |
+| `traceparentHosts` | the `endpoint`'s host | Hosts whose requests carry `traceparent`: exact (`api.example.com`), subdomains only (`*.example.com`) or `*` for every host. Matched on the host alone, any scheme or port. |
 | `requireConsent` | `false` | Collect nothing until `setConsent(true)`. |
 | `diskBuffering` | `false` | Upstream disk buffering: survives offline periods, exports 30 s or more later. |
 | `privacy.dropQuery` | `true` | Drop query strings from URLs, span names, error messages and stack traces. |
@@ -103,9 +106,12 @@ Navigation destination named by its route template.
   exports nothing and sends **no `traceparent`**: flags `00` would make parent-based backend samplers drop the
   server trace too.
 - **Trace link.** Requests made through `FuseScope.callFactory(client)` are `GET`, `POST`, … spans (upstream
-  `opentelemetry-okhttp-3.0`) and carry W3C `traceparent` to every host, so the app span becomes the parent of
-  the backend trace. The factory can be created before `init()`; requests made while collection is off go
-  through the client unchanged.
+  `opentelemetry-okhttp-3.0`). Those to a host in `traceparentHosts` carry W3C `traceparent`, so the app span
+  becomes the parent of the backend trace. By default that is only the `endpoint`'s host, the one host the SDK
+  knows is yours, as `@fusescope/browser` propagates to its own origin only: list your API hosts, e.g.
+  `traceparentHosts = listOf("api.example.com", "*.example.com")`, or `listOf("*")` for every host (the
+  behaviour of 0.1.0-beta.1), which also hands trace ids to third-party APIs. The factory can be created before
+  `init()`; requests made while collection is off go through the client unchanged.
 - **Views.** A `view` span per screen, ending when the next one starts or its Activity pauses, so its duration
   is the time on screen. The screen is the last Activity or Fragment resumed in one main-thread message, so a host
   Activity or a `NavHostFragment` gets no view of its own; names come from upstream's `@RumScreenName` or the
@@ -118,8 +124,8 @@ Navigation destination named by its route template.
 - **Crashes.** Upstream's crash reporter; the record is flushed before the process dies. Sent as an `exception`
   event with `fusescope.rum.error.source = crash`, severity `FATAL`.
 - **ANRs.** Upstream's watchdog reports the main thread after 5 missed 1 s checks (so a block of about 10 s).
-  Sent as an `exception` event with `fusescope.rum.error.source = anr`, `exception.type =
-  ApplicationNotResponding` and the main thread's frames as a Java stack trace, so it is retraced like a crash.
+  Sent as an `exception` event with `fusescope.rum.error.source = anr`, `exception.type = ANR` and the main
+  thread's frames as a Java stack trace, so it is retraced like a crash.
 - **App start.** Upstream's `AppStart` span (`start.type` `cold`, `warm` or `hot`) becomes a `rum.vital` event
   `app_start` in milliseconds. A cold start counts from process start (`Process.getStartUptimeMillis`), which
   upstream's span misses, to the end of the first Activity's creation. Ratings follow Android vitals'
@@ -146,31 +152,41 @@ value. FuseScope can then filter sessions by user without storing who they are.
 
 `release` is the `service.version` resource attribute, and FuseScope retraces stack traces with the mapping
 uploaded for it. The `io.fuseone.fusescope.android.mappings` plugin uploads `mapping.txt` after `assemble<Variant>` and
-`bundle<Variant>` of every minified variant:
+`bundle<Variant>` of every minified variant, each variant its own mapping:
 
 ```kotlin
 fusescope {
     endpoint.set("https://fusescope.example.com")       // or fusescope.endpoint / FUSESCOPE_ENDPOINT
     applicationId.set("01a16431-…")                     // or fusescope.applicationId / FUSESCOPE_APPLICATION_ID
-    apiKey.set(providers.environmentVariable("FUSESCOPE_API_KEY")) // the default; an Editor API key
+    apiKey.set(providers.environmentVariable("FUSESCOPE_API_KEY")) // or fusescope.apiKey / FUSESCOPE_API_KEY; an Editor API key
     // release.set("1.4.0")  defaults to the variant's versionName, like the SDK
     // failOnError.set(false)
 }
 ```
 
+Each setting falls back to a Gradle property and then an environment variable, so CI can pass the key without
+touching the build script: `./gradlew :app:bundleRelease -Pfusescope.apiKey=…`, or `fusescope.apiKey=…` in
+`~/.gradle/gradle.properties` (never in the project's `gradle.properties`, which is committed). The key is an API
+key with the Editor role, sent as `SigNoz-Api-Key`; the public RUM key is not accepted.
+
 Without an endpoint, application id or key the upload is skipped with a warning, so local release builds work.
 `./gradlew :app:uploadFuseScopeMappingRelease` uploads on its own.
+
+Variants that share a `versionName` (flavors, `staging` build types) share a `release`. Each upload carries R8's
+`pg_map_id` as `map_id`, and every obfuscated frame names its file `r8-map-id-<pg_map_id>`, so the backend picks
+the mapping of the build that produced the trace. FuseScope servers that keep one mapping per release use the
+last upload; set a distinct `release` per variant there.
 
 ## Data
 
 | Signal | Name | Key attributes |
 |---|---|---|
-| Resource | — | `service.name`, `service.version`, `deployment.environment.name`, `fusescope.rum.platform=android`, `fusescope.rum.application.id`, `app.package.name`, `fusescope.rum.android.version_code`, `telemetry.distro.name=io.fuseone.fusescope:android`, `telemetry.distro.version`, `telemetry.sdk.*`, `device.*`, `os.*`, `android.os.api_level` |
+| Resource | — | `service.name` (only when `service` is set), `service.version`, `deployment.environment.name`, `fusescope.rum.platform=android`, `fusescope.rum.application.id`, `app.package.name`, `fusescope.rum.android.version_code`, `telemetry.distro.name=io.fuseone.fusescope:android`, `telemetry.distro.version`, `telemetry.sdk.*`, `device.*`, `os.*`, `android.os.api_level` |
 | Every span and log | — | `session.id`, `session.previous_id`, `fusescope.rum.view.route`, `user.id`, `app.screen.name`, `network.*` |
 | Span | `view` | `fusescope.rum.view.route`, `fusescope.rum.view.loading_type`, `fusescope.rum.view.navigation_type`; duration = time on screen |
 | Span | `GET`, `POST`, … | `http.request.method`, `url.full`, `http.response.status_code`, `server.*` |
 | Span | `AppStart` | `start.type` (upstream) |
-| Log event | `exception` | `exception.type`, `exception.message`, `exception.stacktrace`, `fusescope.rum.error.source` (`crash`, `anr`, `manual`), `fusescope.rum.view.route`, `thread.*` |
+| Log event | `exception` | `exception.type` (`ANR` for ANRs), `exception.message`, `exception.stacktrace`, `fusescope.rum.error.source` (`crash`, `anr`, `manual`), `fusescope.rum.view.route`, `thread.*` |
 | Log event | `rum.vital` | `fusescope.rum.vital.name=app_start`, `fusescope.rum.vital.value`, `fusescope.rum.vital.unit=ms`, `fusescope.rum.vital.rating`, `start.type` |
 | Log event | `fusescope.rum.action` | `fusescope.rum.action.type=custom`, `fusescope.rum.action.name` |
 | Log event | `session.start`, `session.end`, `network.change`, `device.screen_orientation` | upstream |
@@ -178,26 +194,27 @@ Without an endpoint, application id or key the upload is skipped with a warning,
 Every log record also carries its event name as the **`event.name`** attribute, because FuseScope's storage drops
 the record's own event-name field.
 
-### Contract assumptions for the backend
+### Backend contract
 
-These are the SDK's side of phase 3; the backend may still rename them.
+What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/fuseone-io/fusescope/blob/main/docs/adr/0003-real-user-monitoring.md), phase 3).
 
 1. **Platform.** `fusescope.rum.platform=android` on the resource; the gateway overwrites it from the application.
-2. **Package name.** `app.package.name` resource attribute (no semantic convention names one), equal to the
-   Android `applicationId`, for the gateway's per-application package check. No `Origin` header is sent.
-3. **Crash vs ANR.** Both are `exception` events; `fusescope.rum.error.source` is `crash` or `anr`, as it is
-   `onerror` / `unhandledrejection` / `manual` on the web. ANRs have `exception.type = ApplicationNotResponding`.
-4. **Release.** `service.version` = the upload's `release` (default `versionName` on both sides);
+2. **Package name.** `app.package.name` resource attribute, equal to the Android `applicationId`; the gateway
+   refuses a request whose package is missing or not among the application's allowed package names. No
+   `Origin` header is sent, and the gateway refuses one.
+3. **Service.** `service.name` only when `service` is set; otherwise the gateway sets it to the application's name.
+4. **Crash vs ANR.** Both are `exception` events; `fusescope.rum.error.source` is `crash` or `anr`, as it is
+   `onerror` / `unhandledrejection` / `manual` on the web. ANRs have `exception.type = ANR`. The gateway maps
+   plain `opentelemetry-android` `app.crash` and `device.anr` events the same way.
+5. **Release.** `service.version` = the upload's `release` (default `versionName` on both sides);
    `fusescope.rum.android.version_code` is informative.
-5. **Stack traces** are raw Java traces (`\tat a.b.c(SourceFile:12)`). R8 names each obfuscated frame's file
-   `r8-map-id-<pg_map_id>`, and the upload sends the same `map_id`, so the backend can pick the exact mapping
-   even when two builds share a release.
-6. **Mapping upload** (assumed, configurable with `uploadPath`):
-   `POST <endpoint>/api/v1/rum/applications/{applicationId}/mappings?release=<release>`, header
-   `SigNoz-Api-Key: <Editor API key>` (as for source maps; the public RUM key is not used), `multipart/form-data`
-   with `release`, then the file part `file` (`filename="mapping.txt"`, `text/plain`), then
-   `package_name`, `variant`, `version_code` and `map_id`. The server reads the first part after `release` as
-   the mapping and answers 201 with `debugId` = `pg_map_id`; any 2xx is success.
+6. **Stack traces** are raw Java traces (`\tat a.b.c(SourceFile:12)`), retraced when read. R8 names each
+   obfuscated frame's file `r8-map-id-<pg_map_id>`, and the upload sends the same `map_id`.
+7. **Mapping upload.** `POST <endpoint>/api/v1/rum/applications/{applicationId}/mappings?release=<release>`
+   (path configurable with `uploadPath`), header `SigNoz-Api-Key: <Editor API key>`, `multipart/form-data`
+   with `release`, then the file part `file` (`filename="mapping.txt"`, `text/plain`), then `package_name`,
+   `variant`, `version_code` and `map_id`. The server answers 201 with the mapping's `pg_map_id` as `debugId`;
+   any 2xx is success.
 
 ## Gateway contract
 
@@ -210,7 +227,8 @@ These are the SDK's side of phase 3; the backend may still rename them.
 
 | io.fuseone.fusescope:android | FuseScope server | OpenTelemetry Android | OpenTelemetry Java |
 |---|---|---|---|
-| 0.1.x | to be filled when the Android gateway ships | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
+| 0.1.0-beta.1 | ≥ 0.155.0 | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
+| 0.1.0-beta.2 | ≥ 0.155.0 | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 
 ## Contributing
 
@@ -233,7 +251,7 @@ adb shell am start -n io.fuseone.fusescope.sample/.MainActivity --es action erro
 ```
 
 The sample sends to `http://10.0.2.2:4399` (the host from the emulator); the stub writes the decoded OTLP
-requests to `build/stub/*.jsonl` and the mapping uploads to `build/stub/mappings/`.
+requests to `build/stub/*.jsonl` and each mapping upload to `build/stub/mappings/<applicationId>/`.
 
 - Behaviour changes start with a failing test: JUnit and Robolectric under `src/test`, the device smoke test
   under `src/androidTest`.
