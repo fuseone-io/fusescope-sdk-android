@@ -69,7 +69,7 @@ class MappingUploaderTest {
         assertTrue(body.contains("name=\"package_name\"\r\n\r\ncom.example.shop\r\n"))
         assertTrue(body.trimEnd().endsWith("--"))
         val parts = Regex("name=\"([a-z_]+)\"").findAll(body).map { it.groupValues[1] }.toList()
-        assertEquals(listOf("release", "file", "package_name", "variant", "version_code", "map_id"), parts)
+        assertEquals(listOf("release", "package_name", "variant", "version_code", "map_id", "file"), parts)
     }
 
     @Test
