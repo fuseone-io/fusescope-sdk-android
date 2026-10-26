@@ -63,12 +63,13 @@ object MappingUploader {
             name: String,
             value: String,
         ) = "--$boundary\r\nContent-Disposition: form-data; name=\"$name\"\r\n\r\n$value\r\n"
-        // The file goes right after `release`: the FuseScope server reads the first other part as the mapping.
+        // Fields precede the file so the server reads them before streaming the mapping.
         val head =
             field("release", u.release) +
+                details.entries.joinToString("") { (name, value) -> field(name, value) } +
                 "--$boundary\r\nContent-Disposition: form-data; name=\"file\"; filename=\"mapping.txt\"\r\n" +
                 "Content-Type: text/plain\r\n\r\n"
-        val tail = "\r\n" + details.entries.joinToString("") { (name, value) -> field(name, value) } + "--$boundary--\r\n"
+        val tail = "\r\n--$boundary--\r\n"
         val body =
             HttpRequest.BodyPublishers.concat(
                 HttpRequest.BodyPublishers.ofString(head),

@@ -174,8 +174,8 @@ Without an endpoint, application id or key the upload is skipped with a warning,
 
 Variants that share a `versionName` (flavors, `staging` build types) share a `release`. Each upload carries R8's
 `pg_map_id` as `map_id`, and every obfuscated frame names its file `r8-map-id-<pg_map_id>`, so the backend picks
-the mapping of the build that produced the trace. FuseScope servers that keep one mapping per release use the
-last upload; set a distinct `release` per variant there.
+the mapping of the build that produced the trace (FuseScope ≥ 0.156.0; older servers keep the release's last
+upload, so set a distinct `release` per variant there).
 
 ## Data
 
@@ -212,8 +212,8 @@ What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/f
    obfuscated frame's file `r8-map-id-<pg_map_id>`, and the upload sends the same `map_id`.
 7. **Mapping upload.** `POST <endpoint>/api/v1/rum/applications/{applicationId}/mappings?release=<release>`
    (path configurable with `uploadPath`), header `SigNoz-Api-Key: <Editor API key>`, `multipart/form-data`
-   with `release`, then the file part `file` (`filename="mapping.txt"`, `text/plain`), then `package_name`,
-   `variant`, `version_code` and `map_id`. The server answers 201 with the mapping's `pg_map_id` as `debugId`;
+   with `release`, `package_name`, `variant`, `version_code` and `map_id`, then the file part `file`
+   (`filename="mapping.txt"`, `text/plain`). The server answers 201 with the mapping's `pg_map_id` as `debugId`;
    any 2xx is success.
 
 ## Gateway contract
