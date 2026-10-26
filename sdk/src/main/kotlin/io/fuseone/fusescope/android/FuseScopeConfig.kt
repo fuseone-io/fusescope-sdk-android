@@ -11,6 +11,9 @@ package io.fuseone.fusescope.android
  * @property service `service.name`; unset, the FuseScope gateway names the service after the application.
  * @property sessionSampleRate Share of sessions recorded, 0 to 1. Unsampled sessions send nothing and no `traceparent`.
  * @property requireConsent Collect nothing until [FuseScope.setConsent] is called with `true`.
+ * @property traceparentHosts Hosts whose requests through [FuseScope.callFactory] carry `traceparent`: exact
+ * (`api.example.com`), subdomains only (`*.example.com`) or `*` for every host. `null`, the default, is the
+ * [endpoint]'s host only.
  */
 public data class FuseScopeConfig
     @JvmOverloads
@@ -27,6 +30,7 @@ public data class FuseScopeConfig
         val instrumentations: InstrumentationsConfig = InstrumentationsConfig(),
         val requireConsent: Boolean = false,
         val diskBuffering: Boolean = false,
+        val traceparentHosts: List<String>? = null,
     )
 
 /**

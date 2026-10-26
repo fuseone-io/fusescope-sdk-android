@@ -9,6 +9,8 @@ import io.opentelemetry.proto.common.v1.KeyValue
 import mockwebserver3.MockResponse
 import mockwebserver3.MockWebServer
 import mockwebserver3.RecordedRequest
+import okhttp3.Call
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.junit.After
@@ -135,6 +137,44 @@ class FuseScopeTest {
         assertEquals("shop-android", named.getAttribute(AttributeKey.stringKey("service.name")))
         val unnamed = Rum.resource(app, resolveConfig(config()))
         assertNull(unnamed.getAttribute(AttributeKey.stringKey("service.name")))
+    }
+
+    private fun MockWebServer.on(
+        host: String,
+        path: String = "/",
+    ): HttpUrl = url(path).newBuilder().host(host).build()
+
+    private fun get(
+        http: Call.Factory,
+        url: HttpUrl,
+    ): String? {
+        http.newCall(Request.Builder().url(url).build()).execute().close()
+        return api.takeRequest(1, TimeUnit.SECONDS)!!.headers["traceparent"]
+    }
+
+    @Test
+    fun `sends traceparent only to allowed hosts`() {
+        repeat(4) { gateway.enqueue(MockResponse(code = 200)) }
+        repeat(2) { api.enqueue(MockResponse(code = 200)) }
+        FuseScope.init(RuntimeEnvironment.getApplication(), config().copy(endpoint = gateway.on("localhost").toString()))
+        Robolectric.buildActivity(CheckoutActivity::class.java).setup()
+        shadowOf(Looper.getMainLooper()).idle()
+        val http = FuseScope.callFactory(OkHttpClient())
+        assertNull(get(http, api.on("127.0.0.1", "/cart")))
+        assertNotNull(get(http, api.on("localhost", "/cart")))
+        drain()
+        val spans = traces.flatMap { it.resourceSpansList }.flatMap { it.scopeSpansList }.flatMap { it.spansList }
+        assertEquals(2, spans.count { it.name == "GET" })
+    }
+
+    @Test
+    fun `traceparentHosts star sends traceparent everywhere`() {
+        api.enqueue(MockResponse(code = 200))
+        val c = config().copy(endpoint = gateway.on("localhost").toString(), traceparentHosts = listOf("*"))
+        FuseScope.init(RuntimeEnvironment.getApplication(), c)
+        Robolectric.buildActivity(CheckoutActivity::class.java).setup()
+        shadowOf(Looper.getMainLooper()).idle()
+        assertNotNull(get(FuseScope.callFactory(OkHttpClient()), api.on("127.0.0.1", "/cart")))
     }
 
     @Test

@@ -1,5 +1,7 @@
 package io.fuseone.fusescope.android
 
+import okhttp3.HttpUrl.Companion.toHttpUrl
+
 internal const val KEY_HEADER = "FuseScope-RUM-Key"
 
 internal data class ResolvedConfig(
@@ -18,6 +20,7 @@ internal data class ResolvedConfig(
     val instrumentations: InstrumentationsConfig,
     val requireConsent: Boolean,
     val diskBuffering: Boolean,
+    val traceparentHosts: TraceparentHosts,
 )
 
 private val ABSOLUTE_HTTP_URL = Regex("^https?://[^/?#\\s]+[^?#\\s]*$", RegexOption.IGNORE_CASE)
@@ -31,6 +34,11 @@ internal fun resolveConfig(c: FuseScopeConfig): ResolvedConfig {
     require(c.sessionSampleRate in 0.0..1.0) { "FuseScope: sessionSampleRate must be within [0, 1]" }
     require(c.session.inactivityTimeoutMillis > 0 && c.session.maxDurationMillis > 0) {
         "FuseScope: session timeouts must be positive"
+    }
+    c.traceparentHosts?.forEach {
+        require(TraceparentHosts.isValid(it)) {
+            "FuseScope: traceparentHosts takes hosts such as api.example.com, *.example.com or *, got \"$it\""
+        }
     }
     val base = c.endpoint.trimEnd('/')
     return ResolvedConfig(
@@ -49,5 +57,6 @@ internal fun resolveConfig(c: FuseScopeConfig): ResolvedConfig {
         instrumentations = c.instrumentations,
         requireConsent = c.requireConsent,
         diskBuffering = c.diskBuffering,
+        traceparentHosts = TraceparentHosts(c.traceparentHosts ?: listOf(c.endpoint.toHttpUrl().host)),
     )
 }
