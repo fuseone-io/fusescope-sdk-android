@@ -23,8 +23,14 @@ internal class NativeProtoReader private constructor(
         val number = (tag ushr 3).toInt()
         require(number > 0)
         return when ((tag and 7).toInt()) {
-            0 -> NativeProtoField(number, scalar = varint())
-            1 -> skip(number, 8)
+            0 -> {
+                NativeProtoField(number, scalar = varint())
+            }
+
+            1 -> {
+                skip(number, 8)
+            }
+
             2 -> {
                 val length = varint()
                 require(length >= 0 && length <= end - position)
@@ -32,8 +38,14 @@ internal class NativeProtoReader private constructor(
                 position += length.toInt()
                 NativeProtoField(number, message = child)
             }
-            5 -> skip(number, 4)
-            else -> throw IllegalArgumentException("Unsupported protobuf wire type")
+
+            5 -> {
+                skip(number, 4)
+            }
+
+            else -> {
+                throw IllegalArgumentException("Unsupported protobuf wire type")
+            }
         }
     }
 
