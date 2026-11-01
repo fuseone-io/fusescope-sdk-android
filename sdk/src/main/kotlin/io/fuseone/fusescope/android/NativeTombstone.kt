@@ -9,6 +9,7 @@ private const val MAX_NATIVE_PROTO_BYTES = 4 * 1024 * 1024
 private const val MAX_NATIVE_STACK_CHARS = 65537
 private const val MAX_NATIVE_FRAMES = 201
 private val NATIVE_BUILD_ID = Regex("[0-9a-fA-F]{1,128}")
+private val NATIVE_LINE_BREAKS = Regex("[\\r\\n]")
 private val NATIVE_WHITESPACE = Regex("\\s+")
 
 /**
@@ -32,8 +33,14 @@ private fun decodeNativeTombstone(root: NativeProtoReader): NativeTombstone {
     while (true) {
         val field = root.next() ?: break
         when (field.number) {
-            6 -> tid = field.scalar
-            10 -> signal = signalName(field.message)
+            6 -> {
+                tid = field.scalar
+            }
+
+            10 -> {
+                signal = signalName(field.message)
+            }
+
             16 -> {
                 val entry = field.message ?: continue
                 var id = 0L
@@ -84,10 +91,10 @@ private fun nativeFrame(
         val field = frame.next() ?: break
         when (field.number) {
             1 -> pc = field.scalar
-            4 -> function = field.message?.text(256).orEmpty().replace('\n', ' ').replace('\r', ' ')
+            4 -> function = nativeText(field, 256).replace(NATIVE_LINE_BREAKS, " ")
             5 -> offset = field.scalar
-            6 -> file = field.message?.text(1024).orEmpty().replace(NATIVE_WHITESPACE, "_")
-            8 -> build = field.message?.text(128).orEmpty()
+            6 -> file = nativeText(field, 1024).replace(NATIVE_WHITESPACE, "_")
+            8 -> build = nativeText(field, 128)
         }
     }
     if (file.isBlank()) return null
@@ -95,3 +102,8 @@ private fun nativeFrame(
     val id = if (NATIVE_BUILD_ID.matches(build)) " (BuildId: $build)" else ""
     return "#${index.toString().padStart(2, '0')} pc ${pc.toULong().toString(16)} $file$symbol$id"
 }
+
+private fun nativeText(
+    field: NativeProtoField,
+    limit: Int,
+): String = field.message?.text(limit).orEmpty()
