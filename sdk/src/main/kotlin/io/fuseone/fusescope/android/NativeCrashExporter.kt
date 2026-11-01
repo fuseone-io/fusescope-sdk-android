@@ -32,8 +32,7 @@ internal fun exportNativeCrash(
     var result: CompletableResultCode? = null
     val borrowed =
         object : LogRecordExporter by exporter {
-            override fun export(logs: Collection<LogRecordData>): CompletableResultCode =
-                exporter.export(logs).also { result = it }
+            override fun export(logs: Collection<LogRecordData>): CompletableResultCode = exporter.export(logs).also { result = it }
 
             override fun flush(): CompletableResultCode = CompletableResultCode.ofSuccess()
 
