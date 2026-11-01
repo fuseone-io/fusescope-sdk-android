@@ -19,10 +19,10 @@ def adb(*args: str) -> str:
 
 
 def launch(action: str | None = None) -> None:
-    args = ["shell", "am", "start", "-n", ACTIVITY]
+    args = ["shell", "am", "start", "-W", "--activity-single-top", "-n", ACTIVITY]
     if action:
         args += ["--es", "action", action]
-    adb(*args)
+    print(adb(*args), flush=True)
 
 
 def records(path: pathlib.Path) -> list[dict]:
@@ -55,6 +55,8 @@ def wait_for(check, message: str, seconds: int = 60):
 def main() -> None:
     adb("install", "-r", "sample/build/outputs/apk/debug/sample-debug.apk")
     adb("shell", "pm", "clear", PACKAGE)
+    adb("shell", "input", "keyevent", "KEYCODE_WAKEUP")
+    adb("shell", "wm", "dismiss-keyguard")
     with tempfile.TemporaryDirectory(prefix="fusescope-native-") as directory:
         output = pathlib.Path(directory)
         stub = subprocess.Popen(
