@@ -39,10 +39,9 @@ class NativeExitRecoveryTest {
             }.recover(listOf(exit))
         }
         NativeExitRecovery("app-native", MemoryNativeHistory(snapshot)) {
-                reports += it
-                true
-            }
-            .recover(listOf(exit.copy(summary = null)))
+            reports += it
+            true
+        }.recover(listOf(exit.copy(summary = null)))
         assertTrue(reports.isEmpty())
     }
 
