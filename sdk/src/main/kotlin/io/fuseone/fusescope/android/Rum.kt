@@ -41,6 +41,7 @@ internal class Rum private constructor(
     private val sdk: OpenTelemetrySdk,
     private val state: RumState,
     private val autoViews: AutoViews,
+    private val nativeCrashes: AutoCloseable?,
 ) {
     val openTelemetry: OpenTelemetry get() = otelRum.openTelemetry
     private val logger: Logger = otelRum.openTelemetry.logsBridge.get(SDK_NAME)
@@ -91,6 +92,7 @@ internal class Rum private constructor(
 
     /** Flushes on the calling thread; upstream's shutdown removes lifecycle observers, so it runs on the main thread. */
     fun shutdown() {
+        nativeCrashes?.close()
         application.unregisterActivityLifecycleCallbacks(autoViews)
         flush()
         if (Looper.myLooper() == Looper.getMainLooper()) otelRum.shutdown() else Handler(Looper.getMainLooper()).post(otelRum::shutdown)
@@ -107,6 +109,7 @@ internal class Rum private constructor(
             val sessions =
                 RumSessionManager(config.session, config.sessionSampleRate, sharedPreferencesStore(application))
             val state = RumState(sessions)
+            val resource = resource(application, config)
             val processStart = processStartEpochNanos()
             val vitalsLogger = AtomicReference<Logger?>()
             val sdk = AtomicReference<OpenTelemetrySdk>()
@@ -114,7 +117,7 @@ internal class Rum private constructor(
                 RumBuilder
                     .builder(application, rumConfig(config))
                     .setSessionProvider(sessions)
-                    .setResource(resource(application, config))
+                    .setResource(resource)
                     .addPropagatorCustomizer { SampledOnlyPropagator(W3CTraceContextPropagator.getInstance()) }
                     .addTracerProviderCustomizer { builder, _ ->
                         builder
@@ -139,7 +142,8 @@ internal class Rum private constructor(
             val tracer = otelRum.openTelemetry.getTracer(SDK_NAME, BuildConfig.SDK_VERSION)
             val autoViews = AutoViews(ViewController(tracer, state), sessions, config.instrumentations.views)
             application.registerActivityLifecycleCallbacks(autoViews)
-            return Rum(application, config, otelRum, sdk.get(), state, autoViews)
+            val nativeCrashes = startNativeCrashes(application, config, sessions, resource, exporters.logs)
+            return Rum(application, config, otelRum, sdk.get(), state, autoViews, nativeCrashes)
         }
 
         private fun processStartEpochNanos(): Long? {
