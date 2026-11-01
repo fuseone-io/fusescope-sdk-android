@@ -69,8 +69,12 @@ def main() -> None:
                 lambda: next((r for r in records(logs) if r["attrs"].get("fusescope.rum.error.source") == "manual"), None),
                 "sample did not export the initial session",
             )
+            original_pid = adb("shell", f"pidof {PACKAGE} || true")
             launch("native")
-            wait_for(lambda: not adb("shell", f"pidof {PACKAGE} || true"), "sample did not crash")
+            wait_for(
+                lambda: adb("shell", f"pidof {PACKAGE} || true") != original_pid,
+                "sample process did not exit after SIGABRT",
+            )
             time.sleep(3)
             launch()
             native = wait_for(
@@ -90,6 +94,10 @@ def main() -> None:
             matching = [r for r in records(logs) if r["attrs"].get("fusescope.rum.native.exit_id") == exit_id]
             assert len(matching) == 1, matching
             print("Native SIGABRT recovered with frames, original session and no duplicate")
+        except Exception:
+            print(adb("logcat", "-d", "-t", "300"), file=sys.stderr)
+            print(adb("shell", "dumpsys", "activity", "exit-info", PACKAGE), file=sys.stderr)
+            raise
         finally:
             stub.terminate()
             stub.wait(timeout=10)
