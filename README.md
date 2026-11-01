@@ -136,6 +136,14 @@ Navigation destination named by its route template.
   `fusescope.rum.view.loading_type` is `initial_load` for the first view of the process and `route_change`
   after; `fusescope.rum.view.navigation_type` is `load`, `push`, `restore` (the same screen shown again) or
   `manual`.
+- **Native crashes (upcoming release).** On API 30+, recover native process exits through
+  `ApplicationExitInfo` on the next consented launch, with source `native` and the original session,
+  release and timestamp. API 31+ can supply tombstone code frames; missing/overwritten traces produce
+  metadata only. Only the crashing thread's code frames are retained, excluding registers, memory,
+  command lines and logs. `instrumentations.crashes=false` disables recovery. Uninitialized and
+  unsampled exits are ignored; successful exports are deduplicated, while failed exports can retry
+  while bounded OS history and private snapshots remain available. No native signal handler or new
+  runtime dependency is installed. R8 does not apply; ELF/DWARF symbolication is not included.
 - **Crashes.** Upstream's crash reporter; the record is flushed before the process dies. Sent as an `exception`
   event with `fusescope.rum.error.source = crash`, severity `FATAL`.
 - **ANRs.** Upstream's watchdog reports the main thread after 5 missed 1 s checks (so a block of about 10 s).
@@ -201,7 +209,7 @@ upload, so set a distinct `release` per variant there).
 | Span | `view` | `fusescope.rum.view.route`, `fusescope.rum.view.loading_type`, `fusescope.rum.view.navigation_type`; duration = time on screen |
 | Span | `GET`, `POST`, … | `http.request.method`, `url.full`, `http.response.status_code`, `server.*` |
 | Span | `AppStart` | `start.type` (upstream) |
-| Log event | `exception` | `exception.type` (`ANR` for ANRs), `exception.message`, `exception.stacktrace`, `fusescope.rum.error.source` (`crash`, `anr`, `manual`), `fusescope.rum.view.route`, `thread.*` |
+| Log event | `exception` | `exception.type` (`ANR` for ANRs), `exception.message`, `exception.stacktrace`, `fusescope.rum.error.source` (`crash`, `anr`, `manual`, `native`), `fusescope.rum.view.route`, `thread.*` |
 | Log event | `rum.vital` | `fusescope.rum.vital.name=app_start`, `fusescope.rum.vital.value`, `fusescope.rum.vital.unit=ms`, `fusescope.rum.vital.rating`, `start.type` |
 | Log event | `fusescope.rum.action` | `fusescope.rum.action.type=custom`, `fusescope.rum.action.name` |
 | Log event | `session.start`, `session.end`, `network.change`, `device.screen_orientation` | upstream |
@@ -262,7 +270,7 @@ End to end on an emulator, against a local stand-in for the gateway (never a rea
 ```bash
 uv run --no-project --with opentelemetry-proto==1.39.1 scripts/stub_gateway.py --port 4399 --out build/stub
 FUSESCOPE_API_KEY=stub ./gradlew :sample:installRelease -Pfusescope.sample.uploadMapping=true
-adb shell am start -n io.fuseone.fusescope.sample/.MainActivity --es action error   # request, crash, anr, details, compose
+adb shell am start -n io.fuseone.fusescope.sample/.MainActivity --es action error   # request, crash, native, anr, details, compose
 ```
 
 The sample sends to `http://10.0.2.2:4399` (the host from the emulator); the stub writes the decoded OTLP
@@ -305,3 +313,9 @@ To enable it:
 ## Licence
 
 [Apache-2.0](LICENSE). See [NOTICE](NOTICE) for the OpenTelemetry attribution.
+
+To exercise native recovery on an API 31+ emulator against the local stub, build the sample with
+`./gradlew :sample:assembleDebug`, install `opentelemetry-proto==1.39.1` in your Python environment,
+and run `python scripts/native_smoke.py`. It deliberately aborts the sample process and verifies
+frames, the original session and no duplicate after relaunch. Native recovery requires the upcoming
+SDK/backend releases; it is not available in SDK `0.1.0-beta.2`.
