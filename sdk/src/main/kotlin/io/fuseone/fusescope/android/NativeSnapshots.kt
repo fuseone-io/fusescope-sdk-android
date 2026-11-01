@@ -5,8 +5,10 @@ import android.content.Context
 import org.json.JSONObject
 import java.security.MessageDigest
 
-/** Small durable snapshots keyed by the opaque token stored in ApplicationExitInfo. */
-// Explicit commits retain their success result; snapshots must survive an immediate process death.
+/**
+ * Small durable snapshots keyed by the opaque token stored in ApplicationExitInfo.
+ * Explicit commits retain their success result; snapshots must survive an immediate process death.
+ */
 @SuppressLint("ApplySharedPref", "UseKtx")
 internal class NativeSnapshots(
     context: Context,
