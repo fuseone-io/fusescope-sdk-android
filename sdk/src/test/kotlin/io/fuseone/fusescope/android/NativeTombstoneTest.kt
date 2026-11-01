@@ -12,13 +12,13 @@ class NativeTombstoneTest {
     fun `decodes only the crashing thread and excludes memory logs and command line`() {
         val frame =
             scalar(1, 0x42) + text(4, "checkout") + scalar(5, 8) +
-            text(6, "/data/app/example/libshop.so") + text(8, "aabbcc")
+                text(6, "/data/app/example/libshop.so") + text(8, "aabbcc")
         val thread = scalar(1, 7) + message(4, frame) + text(5, "private memory")
         val mapEntry = scalar(1, 7) + message(2, thread)
         // Deliberately put the thread before tid: protobuf fields need not be ordered.
         val bytes =
             message(16, mapEntry) + scalar(6, 7) +
-            message(10, text(2, "SIGABRT")) + text(9, "private command") + text(18, "private logs")
+                message(10, text(2, "SIGABRT")) + text(9, "private command") + text(18, "private logs")
         val parsed = requireNotNull(parseNativeTombstone(bytes))
         assertEquals("SIGABRT", parsed.signal)
         assertTrue(parsed.stack.contains("#00 pc 42 /data/app/example/libshop.so (checkout+8) (BuildId: aabbcc)"))
