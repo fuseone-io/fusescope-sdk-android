@@ -19,7 +19,11 @@ class NativeCrashExporterTest {
         val crash = RecoveredNativeCrash(context, exit, NativeTombstone("SIGSEGV", "#00 pc 42 /data/app/libshop.so"))
         val resource =
             Resource.create(
-                Attributes.builder().put("service.version", "2.0").put("deployment.environment.name", "new-environment").build(),
+                Attributes
+                    .builder()
+                    .put("service.version", "2.0")
+                    .put("deployment.environment.name", "new-environment")
+                    .build(),
             )
         assertTrue(exportNativeCrash(crash, resource, sink, QueryPolicy.Allow(emptySet())))
         val log = sink.finishedLogRecordItems.single()
