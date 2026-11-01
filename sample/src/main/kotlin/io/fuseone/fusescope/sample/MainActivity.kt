@@ -18,7 +18,7 @@ import kotlin.concurrent.thread
 
 /**
  * Buttons for each signal. `adb shell am start -n io.fuseone.fusescope.sample/.MainActivity --es action <name>` runs
- * one without a tap: request, error, crash, anr, details, compose, flush.
+ * one without a tap: request, error, crash, native, anr, details, compose, flush.
  */
 class MainActivity : FragmentActivity() {
     private val http by lazy { FuseScope.callFactory(OkHttpClient()) }
@@ -30,6 +30,7 @@ class MainActivity : FragmentActivity() {
                 "request" to ::request,
                 "error" to { FuseScope.addError(IllegalStateException("Checkout failed for https://shop.example/cart?token=secret")) },
                 "crash" to { Checkout().pay() },
+                "native" to { android.os.Process.sendSignal(android.os.Process.myPid(), android.system.OsConstants.SIGABRT) },
                 "anr" to { Thread.sleep(ANR_MILLIS) },
                 "details" to ::details,
                 "compose" to { startActivity(Intent(this, ComposeActivity::class.java)) },
