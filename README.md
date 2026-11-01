@@ -1,4 +1,19 @@
-# FuseScope Android SDK
+<p align="center">
+  <img alt="FuseScope" src=".github/brand/fusescope-logo-universal.svg" width="440">
+</p>
+
+<h1 align="center">FuseScope Android SDK</h1>
+
+<p align="center">
+  <b>Real User Monitoring for Android apps, built on OpenTelemetry Android.</b>
+</p>
+
+<p align="center">
+  <a href="https://docs.fusescope.fuseone.io/frontend/set-up-android/">Docs</a> ·
+  <a href="https://central.sonatype.com/namespace/io.fuseone.fusescope">Maven Central</a> ·
+  <a href="LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-0f5fb8"></a>
+  <a href="https://github.com/fuseone-io/fusescope-sdk-android/issues"><img alt="GitHub issues" src="https://img.shields.io/github/issues/fuseone-io/fusescope-sdk-android?color=950fb8"></a>
+</p>
 
 Real User Monitoring for Android apps, sending to [FuseScope](https://github.com/fuseone-io/fusescope). It is a
 thin distribution over [OpenTelemetry Android](https://github.com/open-telemetry/opentelemetry-android) 1.7.0
