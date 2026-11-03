@@ -1,0 +1,90 @@
+name: native-acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      sdk_version:
+        description: Published Maven SDK version
+        required: true
+        default: 0.1.0-beta.3
+      backend_ref:
+        description: Backend release tag or full commit SHA
+        required: true
+        default: v0.159.0-beta.1
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      NATIVE_ACCEPTANCE_DIR: ${{ github.workspace }}/build/native-acceptance
+      NATIVE_SCREENSHOT: ${{ github.workspace }}/build/native-acceptance/evidence/errors-native.png
+      SDK_VERSION: ${{ inputs.sdk_version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: fuseone-io/fusescope
+          ref: ${{ inputs.backend_ref }}
+          path: backend
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: gradle/actions/setup-gradle@v4
+      - uses: astral-sh/setup-uv@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Install backend test dependencies
+        working-directory: backend/tests
+        run: uv sync --frozen
+      - name: Prepare real backend and collector
+        run: |
+          mkdir -p "$NATIVE_ACCEPTANCE_DIR/evidence"
+          cp scripts/native_acceptance_setup.py backend/tests/integration/tests/rum/99_native_acceptance_setup.py
+          cd backend/tests
+          uv run pytest --basetemp=./tmp -vv --reuse --with-web integration/tests/rum/99_native_acceptance_setup.py
+      - name: Build sample against published SDK
+        run: python scripts/native_acceptance.py build --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Native crash reaches real FuseScope
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: default
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
+          script: python scripts/native_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
+      - name: Verify Errors UI
+        run: |
+          cp "$NATIVE_ACCEPTANCE_DIR/.env.local" backend/tests/e2e/.env.local
+          cp scripts/native_acceptance.spec.ts backend/tests/e2e/tests/rum/native-release.spec.ts
+          cd backend/tests/e2e
+          pnpm install --frozen-lockfile
+          pnpm exec playwright install --with-deps chromium
+          pnpm exec playwright test tests/rum/native-release.spec.ts --project=chromium --no-deps --workers=1
+      - name: Record source versions
+        if: always()
+        run: |
+          { echo "sdk_version=$SDK_VERSION"; echo "sdk_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-release-acceptance
+          path: build/native-acceptance/evidence/
+          retention-days: 30

@@ -63,8 +63,14 @@ fusescope {
 }
 
 dependencies {
-    implementation(project(":sdk"))
-    implementation(project(":compose"))
+    val publishedSdk = providers.gradleProperty("fusescope.sample.sdkVersion").orNull
+    if (publishedSdk == null) {
+        implementation(project(":sdk"))
+        implementation(project(":compose"))
+    } else {
+        implementation("io.fuseone.fusescope:android:$publishedSdk")
+        implementation("io.fuseone.fusescope:android-compose:$publishedSdk")
+    }
     implementation(libs.androidx.fragment)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)

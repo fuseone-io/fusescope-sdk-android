@@ -32,12 +32,12 @@ Status: 0.1.0 beta, built on upstream's alpha instrumentation; options may chang
 ```kotlin
 // app/build.gradle.kts
 plugins {
-    id("io.fuseone.fusescope.android.mappings") version "0.1.0-beta.2" // optional, uploads R8 mappings
+    id("io.fuseone.fusescope.android.mappings") version "0.1.0-beta.3" // optional, uploads R8 mappings
 }
 
 dependencies {
-    implementation("io.fuseone.fusescope:android:0.1.0-beta.2")
-    implementation("io.fuseone.fusescope:android-compose:0.1.0-beta.2") // optional, Compose and Navigation views
+    implementation("io.fuseone.fusescope:android:0.1.0-beta.3")
+    implementation("io.fuseone.fusescope:android-compose:0.1.0-beta.3") // optional, Compose and Navigation views
 }
 ```
 
@@ -136,7 +136,7 @@ Navigation destination named by its route template.
   `fusescope.rum.view.loading_type` is `initial_load` for the first view of the process and `route_change`
   after; `fusescope.rum.view.navigation_type` is `load`, `push`, `restore` (the same screen shown again) or
   `manual`.
-- **Native crashes (upcoming release).** On API 30+, recover native process exits through
+- **Native crashes (beta.3).** On API 30+, recover native process exits through
   `ApplicationExitInfo` on the next consented launch, with source `native` and the original session,
   release and timestamp. API 31+ can supply tombstone code frames; missing/overwritten traces produce
   metadata only. Only the crashing thread's code frames are retained, excluding registers, memory,
@@ -252,6 +252,7 @@ What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/f
 |---|---|---|---|
 | 0.1.0-beta.1 | ≥ 0.155.0 | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 | 0.1.0-beta.2 | ≥ 0.156.0 (≥ 0.155.0 without per-build mappings) | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
+| 0.1.0-beta.3 | ≥ 0.156.0 for existing signals; ≥ 0.159.0-beta.1 for native frames/grouping | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 
 ## Contributing
 
@@ -317,5 +318,11 @@ To enable it:
 To exercise native recovery on an API 31+ emulator against the local stub, build the sample with
 `./gradlew :sample:assembleDebug`, install `opentelemetry-proto==1.39.1` in your Python environment,
 and run `python scripts/native_smoke.py`. It deliberately aborts the sample process and verifies
-frames, the original session and no duplicate after relaunch. Native recovery requires the upcoming
-SDK/backend releases; it is not available in SDK `0.1.0-beta.2`.
+frames, the original session and no duplicate after relaunch. Native recovery starts in SDK `0.1.0-beta.3`, with FuseScope `0.159.0-beta.1` or later
+for parsed native frames and grouping. It is not available in SDK `0.1.0-beta.2`.
+
+The sample uses the SDK projects by default. To validate the actual Maven Central artifacts,
+build with `-Pfusescope.sample.sdkVersion=0.1.0-beta.3`. CI also checks this consumer path
+against the already published beta.2 before a new release. The manual `native-acceptance`
+workflow exercises a published SDK against a real isolated FuseScope and collector, then
+checks the native event in the Errors UI.
