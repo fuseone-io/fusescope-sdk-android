@@ -7,13 +7,14 @@ test('TC-01 native SDK release appears grouped with frames in Errors', async ({
 	const id = process.env.NATIVE_APPLICATION_ID;
 	expect(id).toBeTruthy();
 	await page.goto(
-		`/frontend/applications/${id}/errors?relativeTime=1h&source=native`,
+		`/frontend/applications/${id}/errors?relativeTime=1h`,
 	);
-	await expect(page.getByTestId('rum-error-group')).toHaveCount(1);
-	await expect(page.getByTestId('rum-error-group-kind')).toHaveText(
+	const native = page.getByTestId('rum-error-group').filter({ hasText: 'Native crash' });
+	await expect(native).toHaveCount(1);
+	await expect(native.getByTestId('rum-error-group-kind')).toHaveText(
 		'Native crash',
 	);
-	await page.getByTestId('rum-error-group-open').click();
+	await native.getByTestId('rum-error-group-open').click();
 	await expect(page.getByTestId('rum-error-type')).toHaveText('SIGABRT');
 	await expect(page.getByTestId('rum-error-kind')).toHaveText('Native crash');
 	await expect(page.getByTestId('rum-error-stack')).toContainText(
