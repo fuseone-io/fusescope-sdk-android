@@ -23,7 +23,7 @@ def get(config: dict, route: str, source: str | None = None) -> dict:
 
 
 def event(config: dict, source: str):
-    groups = get(config, "errors", source).get("groups", [])
+    groups = [group for group in get(config, "errors").get("groups", []) if group["source"] == source]
     if not groups:
         return None
     assert len(groups) == 1, "expected one error group for this source"
