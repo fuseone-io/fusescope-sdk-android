@@ -11,6 +11,10 @@ on:
         description: Backend release tag or full commit SHA
         required: true
         default: v0.159.0-beta.2
+      backend_image:
+        description: Published backend image pinned by digest
+        required: true
+        default: ghcr.io/fuseone-io/fusescope@sha256:629df47b6d940d2644722dd7e9cad363db3da2b58f06faf2ee9d2c3d20cd2a18
 
 permissions:
   contents: read
@@ -23,6 +27,7 @@ jobs:
       NATIVE_ACCEPTANCE_DIR: ${{ github.workspace }}/build/native-acceptance
       NATIVE_SCREENSHOT: ${{ github.workspace }}/build/native-acceptance/evidence/errors-native.png
       SDK_VERSION: ${{ inputs.sdk_version }}
+      BACKEND_IMAGE: ${{ inputs.backend_image }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -50,12 +55,27 @@ jobs:
       - name: Install backend test dependencies
         working-directory: backend/tests
         run: uv sync --frozen
+      - name: Verify published backend image matches source
+        run: |
+          docker pull "$BACKEND_IMAGE"
+          expected=$(git -C backend rev-parse HEAD)
+          actual=$(docker image inspect "$BACKEND_IMAGE" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')
+          test "$actual" = "$expected"
       - name: Prepare real backend and collector
         run: |
           mkdir -p "$NATIVE_ACCEPTANCE_DIR/evidence"
           cp scripts/native_acceptance_setup.py backend/tests/integration/tests/rum/99_native_acceptance_setup.py
+          python - <<'PYCONFIG'
+          from pathlib import Path
+          p = Path("backend/tests/integration/tests/rum/conftest.py")
+          marker = '"SIGNOZ_RUM_ENABLED": True,'
+          source = p.read_text()
+          assert marker in source
+          # The published image serves /etc/signoz/web; the source-build fixture uses /root/web.
+          p.write_text(source.replace(marker, '"SIGNOZ_WEB_DIRECTORY": "/etc/signoz/web", ' + marker, 1))
+          PYCONFIG
           cd backend/tests
-          uv run pytest --basetemp=./tmp -vv --reuse --with-web integration/tests/rum/99_native_acceptance_setup.py
+          uv run pytest --basetemp=./tmp -vv --reuse --with-web --signoz-image "$BACKEND_IMAGE" integration/tests/rum/99_native_acceptance_setup.py
       - name: Build sample against published SDK
         run: python scripts/native_acceptance.py build --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
       - name: Enable KVM
@@ -84,7 +104,7 @@ jobs:
         if: always()
         run: |
           mkdir -p "$NATIVE_ACCEPTANCE_DIR/evidence"
-          { echo "sdk_version=$SDK_VERSION"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
+          { echo "sdk_version=$SDK_VERSION"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; echo "backend_image=$BACKEND_IMAGE"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
