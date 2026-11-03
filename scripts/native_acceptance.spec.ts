@@ -1,7 +1,7 @@
 import { expect, test } from '../../fixtures/auth';
 
 // Copied into the pinned backend's tests/e2e/tests/rum by the acceptance workflow.
-test('native SDK release appears grouped with frames in Errors', async ({
+test('TC-01 native SDK release appears grouped with frames in Errors', async ({
 	authedPage: page,
 }) => {
 	const id = process.env.NATIVE_APPLICATION_ID;

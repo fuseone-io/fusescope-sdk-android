@@ -252,7 +252,7 @@ What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/f
 |---|---|---|---|
 | 0.1.0-beta.1 | ≥ 0.155.0 | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 | 0.1.0-beta.2 | ≥ 0.156.0 (≥ 0.155.0 without per-build mappings) | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
-| 0.1.0-beta.3 | ≥ 0.156.0 for existing signals; ≥ 0.159.0-beta.1 for native frames/grouping | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
+| 0.1.0-beta.3 | ≥ 0.156.0 for existing signals; ≥ 0.159.0-beta.2 for native frames/grouping | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 
 ## Contributing
 
@@ -318,7 +318,7 @@ To enable it:
 To exercise native recovery on an API 31+ emulator against the local stub, build the sample with
 `./gradlew :sample:assembleDebug`, install `opentelemetry-proto==1.39.1` in your Python environment,
 and run `python scripts/native_smoke.py`. It deliberately aborts the sample process and verifies
-frames, the original session and no duplicate after relaunch. Native recovery starts in SDK `0.1.0-beta.3`, with FuseScope `0.159.0-beta.1` or later
+frames, the original session and no duplicate after relaunch. Native recovery starts in SDK `0.1.0-beta.3`, with FuseScope `0.159.0-beta.2` or later
 for parsed native frames and grouping. It is not available in SDK `0.1.0-beta.2`.
 
 The sample uses the SDK projects by default. To validate the actual Maven Central artifacts,

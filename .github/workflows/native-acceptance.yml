@@ -10,7 +10,7 @@ on:
       backend_ref:
         description: Backend release tag or full commit SHA
         required: true
-        default: v0.159.0-beta.1
+        default: v0.159.0-beta.2
 
 permissions:
   contents: read
@@ -45,6 +45,8 @@ jobs:
       - uses: pnpm/action-setup@v4
         with:
           version: 10
+      - name: Free disk for backend and emulator
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /opt/hostedtoolcache/CodeQL
       - name: Install backend test dependencies
         working-directory: backend/tests
         run: uv sync --frozen
@@ -81,7 +83,8 @@ jobs:
       - name: Record source versions
         if: always()
         run: |
-          { echo "sdk_version=$SDK_VERSION"; echo "sdk_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
+          mkdir -p "$NATIVE_ACCEPTANCE_DIR/evidence"
+          { echo "sdk_version=$SDK_VERSION"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
