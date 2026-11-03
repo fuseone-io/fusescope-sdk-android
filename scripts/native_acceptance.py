@@ -7,8 +7,9 @@ import subprocess
 import time
 import urllib.parse
 import urllib.request
+from datetime import datetime
 
-from native_smoke import PACKAGE, adb, launch, wait_for
+from native_smoke import PACKAGE, adb, launch, wait_for, wait_native_ack
 
 
 def get(config: dict, route: str, source: str | None = None) -> dict:
@@ -56,17 +57,21 @@ def verify(config: dict, version: str, output: pathlib.Path) -> None:
     launch("native")
     wait_for(lambda: adb("shell", f"pidof {PACKAGE} || true") != pid, "SIGABRT did not terminate the sample")
     time.sleep(3)
+    relaunch_time = time.time()
     launch()
     recovered = wait_for(lambda: event(config, "native"), "native crash did not reach FuseScope", 90)
     crash = recovered["event"]
     assert crash["type"] == "SIGABRT" and crash["source"] == "native"
     assert crash["frames"] and any("pc 0x" in frame["function"] for frame in crash["frames"])
+    timestamp = datetime.fromisoformat(crash["timestamp"].replace("Z", "+00:00")).timestamp()
+    assert crash_time - 2 <= timestamp <= relaunch_time, "native event must retain its pre-relaunch timestamp"
     assert crash["sessionId"] == before["event"]["sessionId"]
     assert crash["release"] == before["event"]["release"]
     assert crash["missingSourceMap"] is None and crash["symbolicated"] is False
     assert recovered["group"]["events"] == 1
     status = get(config, "status")
     assert status["sdk"]["version"] == version, "gateway did not observe the published SDK version"
+    wait_native_ack(f"{round(timestamp * 1000)}:{pid}")
     adb("shell", "am", "force-stop", PACKAGE)
     launch()
     time.sleep(10)

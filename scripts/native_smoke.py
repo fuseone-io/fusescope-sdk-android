@@ -3,12 +3,14 @@
 Requires an API 31+ emulator, the sample APK and opentelemetry-proto==1.39.1.
 """
 
+import hashlib
 import json
 import pathlib
 import subprocess
 import sys
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 
 PACKAGE = "io.fuseone.fusescope.sample"
 ACTIVITY = f"{PACKAGE}/.MainActivity"
@@ -52,6 +54,19 @@ def wait_for(check, message: str, seconds: int = 60):
     raise AssertionError(message)
 
 
+def wait_native_ack(exit_id: str) -> None:
+    namespace = hashlib.sha256(PACKAGE.encode()).hexdigest()
+    filename = f"shared_prefs/fusescope-native-{namespace}.xml"
+
+    def acknowledged() -> bool:
+        xml = adb("shell", "run-as", PACKAGE, "cat", filename)
+        reported = ET.fromstring(xml).find("set[@name='reported']")
+        return reported is not None and any(item.text == exit_id for item in reported)
+
+    # Receipt at the gateway precedes the export callback and durable acknowledgement.
+    wait_for(acknowledged, "SDK did not persist native export acknowledgement")
+
+
 def main() -> None:
     adb("install", "-r", "sample/build/outputs/apk/debug/sample-debug.apk")
     adb("shell", "pm", "clear", PACKAGE)
@@ -90,6 +105,7 @@ def main() -> None:
             assert "user.id" not in attrs, native
             assert not native["log"].get("traceId"), native
             exit_id = attrs["fusescope.rum.native.exit_id"]
+            wait_native_ack(exit_id)
             adb("shell", "am", "force-stop", PACKAGE)
             launch()
             time.sleep(8)
