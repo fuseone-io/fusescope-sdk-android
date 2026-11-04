@@ -128,6 +128,7 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     assert "secret" not in first["message"] and "token=" not in first["stacktrace"]
     session_id = first["sessionId"]
     session = wait_for(lambda: session_ready(config, session_id), "views/request/app-start did not reach the session timeline", 90)
+    (directory / "evidence" / "session.json").write_text(json.dumps(session, indent=2))
     assert session["userId"] == hashlib.sha256(b"sample-user").hexdigest()
     requests = [item["request"] for item in timeline_events(session) if item["kind"] == "request"]
     assert any(item["traceId"] == traceparent.split("-")[1] and item["spanId"] == traceparent.split("-")[2] for item in requests)
@@ -145,6 +146,7 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     launch("anr")
     launch("flush")
     anr = wait_for(lambda: error(config, "anr"), "real blocked-main-thread ANR did not reach FuseScope", 90)
+    (directory / "evidence" / "anr.json").write_text(json.dumps(anr, indent=2))
     assert anr["latestEvents"][0]["type"] == "ANR"
     assert anr["latestEvents"][0]["frames"]
     assert anr["latestEvents"][0]["symbolicated"] and anr["latestEvents"][0]["missingSourceMap"] is None
@@ -152,6 +154,7 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     launch("crash")
     wait_for(lambda: adb("shell", f"pidof {PACKAGE} || true") != pid, "uncaught Java exception did not terminate the app")
     crashed = wait_for(lambda: error(config, "crash"), "uncaught Java crash did not reach FuseScope", 90)
+    (directory / "evidence" / "java-crash.json").write_text(json.dumps(crashed, indent=2))
     event = crashed["latestEvents"][0]
     assert event["symbolicated"] and event["missingSourceMap"] is None
     assert any("Checkout.pay" in (frame.get("original") or {}).get("function", "") for frame in event["frames"])
@@ -222,22 +225,26 @@ def verify(config: dict, directory: pathlib.Path, version: str) -> None:
     worker.start()
     evidence = {"sdkVersion": version, "backend": "published image pinned by digest", "scenarios": {}}
     output = directory / "evidence" / "android-acceptance.json"
+    failures = []
     try:
         for name, check in (("full", verify_full), ("consent", verify_consent), ("unsampled", verify_unsampled)):
             print(f"Real-backend Android acceptance: {name}", flush=True)
             args = (config["scenarios"][name], directory, calls)
-            evidence["scenarios"][name] = check(*args, version) if name == "full" else check(*args)
+            try:
+                evidence["scenarios"][name] = check(*args, version) if name == "full" else check(*args)
+                print(f"Accepted: {name}", flush=True)
+            except Exception as failure:
+                failures.append(name)
+                evidence["scenarios"][name] = {"passed": False, "error": str(failure)}
+                print(f"Failed: {name}: {failure}", flush=True)
+                for route in ("status", "sessions", "errors"):
+                    try:
+                        data = get(config["scenarios"][name], route)
+                        (directory / "evidence" / f"observed-{name}-{route}.json").write_text(json.dumps(data, indent=2))
+                    except Exception:
+                        pass
             output.write_text(json.dumps(evidence, indent=2))
-            print(f"Accepted: {name}", flush=True)
-    except Exception:
-        for name, scenario in config["scenarios"].items():
-            for route in ("status", "sessions", "errors"):
-                try:
-                    data = get(scenario, route)
-                    (directory / "evidence" / f"observed-{name}-{route}.json").write_text(json.dumps(data, indent=2))
-                except Exception:
-                    pass
-        raise
+        assert not failures, f"Android acceptance failed: {', '.join(failures)}"
     finally:
         server.shutdown()
         server.server_close()
