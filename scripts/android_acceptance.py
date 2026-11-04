@@ -76,9 +76,11 @@ def timeline_events(session: dict) -> list[dict]:
     return session["leadingEvents"] + [event for view in session["timeline"] for event in view["events"]]
 
 
-def session_ready(config: dict, session_id: str):
+def session_ready(config: dict, session_id: str, require_app_start: bool = False):
     session = get(config, "sessions/" + session_id)
     routes = {view["route"] for view in session["timeline"]}
+    if require_app_start and (session["vitals"] < 1 or not any(event["kind"] == "vital" and event.get("vital", {}).get("name") == "app_start" for event in timeline_events(session))):
+        return None
     if "orders/{id}" in routes and any("HomeFragment" in r for r in routes) and any("DetailsFragment" in r for r in routes) and session["requests"] >= 1:
         return session
     return None
@@ -135,7 +137,7 @@ def quiet(config: dict, expected_errors: int = 0, seconds: int = 30) -> None:
         time.sleep(2)
 
 
-def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str) -> dict:
+def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str, require_app_start: bool = False) -> dict:
     install(directory, "full")
     launch()
     time.sleep(2)
@@ -153,12 +155,18 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     first = handled["latestEvents"][0]
     assert "secret" not in first["message"] and "token=" not in first["stacktrace"]
     session_id = first["sessionId"]
-    session = wait_for(lambda: session_ready(config, session_id), "views/request did not reach the session timeline", 90)
+    session = wait_for(lambda: session_ready(config, session_id, require_app_start), "views/request did not reach the session timeline", 90)
     (directory / "evidence" / "session.json").write_text(json.dumps(session, indent=2))
     starts = wait_for(lambda: app_start(config, session_id), "actual app_start vital was not stored by the collector", 90)
     assert all(row["name"] == "app_start" and row["unit"] == "ms" and row["value"] >= 0 for row in starts)
     assert all(row["rating"] in ("good", "needs-improvement", "poor") and row["release"] == first["release"] for row in starts)
     (directory / "evidence" / "app-start.json").write_text(json.dumps(starts, indent=2))
+    app_starts = [event["vital"] for event in timeline_events(session) if event["kind"] == "vital" and event.get("vital", {}).get("name") == "app_start"]
+    if require_app_start:
+        assert app_starts and session["vitals"] >= len(app_starts)
+        assert all(any(vital["value"] == stored["value"] and vital["rating"] == stored["rating"] for stored in starts) for vital in app_starts)
+    with (directory / ".env.local").open("a") as environment:
+        environment.write(f"FULL_SESSION_ID={session_id}\n")
     assert session["userId"] == hashlib.sha256(b"sample-user").hexdigest()
     requests = [item["request"] for item in timeline_events(session) if item["kind"] == "request"]
     assert any(item["traceId"] == traceparent.split("-")[1] and item["spanId"] == traceparent.split("-")[2] for item in requests)
@@ -195,7 +203,7 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     (directory / "evidence" / "anr.json").write_text(json.dumps(anr, indent=2))
     (directory / "evidence" / "session.json").write_text(json.dumps(session, indent=2))
     return {"sessionContinuity": True, "views": [v["route"] for v in session["timeline"]],
-            "traceparent": traceparent, "appStartStored": True, "appStartInSessionTimeline": session["vitals"] > 0, "hashedUser": True, "queryScrubbed": True, "traceparentMatchesRequestSpan": True,
+            "traceparent": traceparent, "appStartStored": True, "appStartInSessionTimeline": bool(app_starts), "hashedUser": True, "queryScrubbed": True, "traceparentMatchesRequestSpan": True,
             "javaCrashSymbolicated": True, "anrSymbolicated": True}
 
 
@@ -240,7 +248,7 @@ def verify_unsampled(config: dict, directory: pathlib.Path, calls: list) -> dict
     return {"sampleRate": 0, "noIngest": True, "noTraceparent": True, "unsampledDecisionPersisted": True}
 
 
-def verify(config: dict, directory: pathlib.Path, version: str) -> None:
+def verify(config: dict, directory: pathlib.Path, version: str, require_app_start: bool = False) -> None:
     calls = []
 
     class API(BaseHTTPRequestHandler):
@@ -257,7 +265,7 @@ def verify(config: dict, directory: pathlib.Path, version: str) -> None:
     server = ThreadingHTTPServer(("0.0.0.0", 4399), API)
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
-    evidence = {"sdkVersion": version, "backend": "published image pinned by digest", "scenarios": {}}
+    evidence = {"sdkVersion": version, "backend": os.environ.get("BACKEND_IMAGE", "see versions.txt"), "requiresAppStartTimeline": require_app_start, "scenarios": {}}
     output = directory / "evidence" / "android-acceptance.json"
     failures = []
     try:
@@ -265,7 +273,7 @@ def verify(config: dict, directory: pathlib.Path, version: str) -> None:
             print(f"Real-backend Android acceptance: {name}", flush=True)
             args = (config["scenarios"][name], directory, calls)
             try:
-                evidence["scenarios"][name] = check(*args, version) if name == "full" else check(*args)
+                evidence["scenarios"][name] = check(*args, version, require_app_start) if name == "full" else check(*args)
                 print(f"Accepted: {name}", flush=True)
             except Exception as failure:
                 failures.append(name)
@@ -289,12 +297,13 @@ def main() -> None:
     parser.add_argument("mode", choices=["build", "verify"])
     parser.add_argument("--config", type=pathlib.Path, required=True)
     parser.add_argument("--sdk-version", required=True)
+    parser.add_argument("--require-app-start-timeline", action="store_true")
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
     if args.mode == "build":
         build(config, args.sdk_version, args.config.parent)
     else:
-        verify(config, args.config.parent, args.sdk_version)
+        verify(config, args.config.parent, args.sdk_version, args.require_app_start_timeline)
 
 
 if __name__ == "__main__":

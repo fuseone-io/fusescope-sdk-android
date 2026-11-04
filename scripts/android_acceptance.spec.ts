@@ -25,3 +25,19 @@ for (const [source, kind, symbol] of [
 		});
 	});
 }
+
+
+test('TC-04 Android app start is visible in the session timeline', async ({ authedPage: page }) => {
+	test.skip(process.env.REQUIRE_APP_START_TIMELINE !== 'true', 'Requires a backend containing #312');
+	const id = process.env.FULL_APPLICATION_ID;
+	const session = process.env.FULL_SESSION_ID;
+	expect(id).toBeTruthy();
+	expect(session).toBeTruthy();
+	await page.goto(`/frontend/applications/${id}/sessions/${session}?relativeTime=1h`);
+	await expect(page.getByTestId('rum-session-id')).toContainText(session!);
+	await page.getByTestId('rum-session-kind-vitals').click();
+	const appStart = page.locator('[data-testid="rum-session-event"][data-kind="vital"]').filter({ hasText: /App start [\d.]+ (ms|s)/ });
+	await expect(appStart.first()).toBeVisible();
+	await expect(appStart.first()).toContainText(/Good|Needs improvement|Poor/);
+	await page.screenshot({ path: path.join(process.env.NATIVE_ACCEPTANCE_DIR!, 'evidence', 'session-app-start.png'), fullPage: true });
+});

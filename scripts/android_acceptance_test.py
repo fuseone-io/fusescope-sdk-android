@@ -15,6 +15,16 @@ class AcceptanceOracleTest(unittest.TestCase):
             self.assertFalse(sampled_traceparent(header))
 
     @patch("android_acceptance.get")
+    def test_strict_timeline_acceptance_requires_app_start_not_just_web_vitals(self, get):
+        session = {"timeline": [{"route": route, "events": []} for route in ("HomeFragment", "DetailsFragment", "orders/{id}")], "requests": 1, "vitals": 1, "leadingEvents": [{"kind": "vital", "vital": {"name": "lcp"}}]}
+        get.return_value = session
+        self.assertIsNone(session_ready({}, "session", require_app_start=True))
+        session["leadingEvents"][0]["vital"]["name"] = "app_start"
+        self.assertEqual(session, session_ready({}, "session", require_app_start=True))
+        session["vitals"] = 0
+        self.assertIsNone(session_ready({}, "session", require_app_start=True))
+
+    @patch("android_acceptance.get")
     def test_session_views_are_checked_separately_from_app_vital_storage(self, get):
         session = {"timeline": [{"route": route} for route in ("HomeFragment", "DetailsFragment", "orders/{id}")], "requests": 1, "vitals": 0}
         get.return_value = session
