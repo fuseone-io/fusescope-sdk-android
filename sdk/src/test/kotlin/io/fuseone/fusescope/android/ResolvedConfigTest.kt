@@ -59,6 +59,22 @@ class ResolvedConfigTest {
     }
 
     @Test
+    fun `invalid endpoint diagnostics never echo configuration secrets`() {
+        for (endpoint in listOf("https://example.com/?token=private-token", "https://example.com/#private-token")) {
+            val error = assertThrows(IllegalArgumentException::class.java) { resolveConfig(base.copy(endpoint = endpoint)) }
+            assertFalse(error.message.orEmpty().contains("private-token"))
+        }
+    }
+
+    @Test
+    fun `rejects endpoint credentials without echoing them`() {
+        for (endpoint in listOf("https://user:private-token@example.com", "https://private-token@example.com")) {
+            val error = assertThrows(IllegalArgumentException::class.java) { resolveConfig(base.copy(endpoint = endpoint)) }
+            assertFalse(error.message.orEmpty().contains("private-token"))
+        }
+    }
+
+    @Test
     fun `rejects invalid configuration`() {
         val invalid =
             listOf(
