@@ -77,6 +77,8 @@ jobs:
           marker = '"SIGNOZ_RUM_ENABLED": True,'
           source = p.read_text()
           assert marker in source
+          # The negative-test fixture uses tiny artifact quotas. Acceptance uses production defaults.
+          source = "\n".join(line for line in source.splitlines() if '"SIGNOZ_RUM_SOURCEMAPS_' not in line) + "\n"
           # The published image serves /etc/signoz/web; the source-build fixture uses /root/web.
           p.write_text(source.replace(marker, '"SIGNOZ_WEB_DIRECTORY": "/etc/signoz/web", ' + marker, 1))
           PYCONFIG
