@@ -7,6 +7,11 @@ on:
         description: Published Maven SDK version
         required: true
         default: 0.1.0-beta.3
+      full_acceptance:
+        description: Also validate Android 1.0 sessions, consent, sampling, Compose, Java/ANR/R8 and Errors UI
+        type: boolean
+        required: false
+        default: false
       backend_ref:
         description: Backend release tag or full commit SHA
         required: true
@@ -26,6 +31,7 @@ jobs:
     env:
       NATIVE_ACCEPTANCE_DIR: ${{ github.workspace }}/build/native-acceptance
       NATIVE_SCREENSHOT: ${{ github.workspace }}/build/native-acceptance/evidence/errors-native.png
+      FULL_ACCEPTANCE: ${{ inputs.full_acceptance }}
       SDK_VERSION: ${{ inputs.sdk_version }}
       BACKEND_IMAGE: ${{ inputs.backend_image }}
     steps:
@@ -78,6 +84,9 @@ jobs:
           uv run pytest --basetemp=./tmp -vv --reuse --with-web --signoz-image "$BACKEND_IMAGE" integration/tests/rum/99_native_acceptance_setup.py
       - name: Build sample against published SDK
         run: python scripts/native_acceptance.py build --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
+      - name: Build complete Android acceptance scenarios
+        if: inputs.full_acceptance
+        run: python scripts/android_acceptance.py build --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -91,15 +100,19 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
-          script: python scripts/native_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
+          script: |
+            python scripts/native_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
+            if [ "$FULL_ACCEPTANCE" = "true" ]; then python scripts/android_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"; fi
       - name: Verify Errors UI
         run: |
           cp "$NATIVE_ACCEPTANCE_DIR/.env.local" backend/tests/e2e/.env.local
           cp scripts/native_acceptance.spec.ts backend/tests/e2e/tests/rum/native-release.spec.ts
+          if [ "$FULL_ACCEPTANCE" = "true" ]; then cp scripts/android_acceptance.spec.ts backend/tests/e2e/tests/rum/android-release.spec.ts; fi
           cd backend/tests/e2e
           pnpm install --frozen-lockfile
           pnpm exec playwright install --with-deps chromium
           pnpm exec playwright test tests/rum/native-release.spec.ts --project=chromium --no-deps --workers=1
+          if [ "$FULL_ACCEPTANCE" = "true" ]; then pnpm exec playwright test tests/rum/android-release.spec.ts --project=chromium --no-deps --workers=1; fi
       - name: Record source versions
         if: always()
         run: |

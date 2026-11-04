@@ -12,14 +12,16 @@ import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
 import io.fuseone.fusescope.android.FuseScope
+import io.opentelemetry.android.instrumentation.annotations.RumScreenName
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import kotlin.concurrent.thread
 
 /**
  * Buttons for each signal. `adb shell am start -n io.fuseone.fusescope.sample/.MainActivity --es action <name>` runs
- * one without a tap: request, error, crash, native, anr, details, compose, flush.
+ * one without a tap: request, error, crash, native, anr, details, compose, consent, revoke, flush.
  */
+@RumScreenName("MainActivity")
 class MainActivity : FragmentActivity() {
     private val http by lazy { FuseScope.callFactory(OkHttpClient()) }
 
@@ -34,6 +36,8 @@ class MainActivity : FragmentActivity() {
                 "anr" to { Thread.sleep(ANR_MILLIS) },
                 "details" to ::details,
                 "compose" to { startActivity(Intent(this, ComposeActivity::class.java)) },
+                "consent" to { FuseScope.setConsent(true) },
+                "revoke" to { thread { FuseScope.setConsent(false) } },
                 "flush" to { thread { FuseScope.flush() } },
             )
         val column = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -77,6 +81,7 @@ class MainActivity : FragmentActivity() {
             .commit()
     }
 
+    @RumScreenName("HomeFragment")
     class HomeFragment : Fragment() {
         override fun onCreateView(
             inflater: LayoutInflater,
@@ -85,6 +90,7 @@ class MainActivity : FragmentActivity() {
         ): View = TextView(inflater.context).apply { text = "Home" }
     }
 
+    @RumScreenName("DetailsFragment")
     class DetailsFragment : Fragment() {
         override fun onCreateView(
             inflater: LayoutInflater,

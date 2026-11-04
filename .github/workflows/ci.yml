@@ -24,6 +24,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Lint (ktlint, Android lint)
         run: ./gradlew ktlintCheck lintRelease
+      - name: Acceptance oracle checks
+        run: python3 -m unittest discover -s scripts -p '*_test.py'
       - name: Unit tests
         run: ./gradlew testDebugUnitTest
       - name: Gradle plugin (lint, tests, validation)
