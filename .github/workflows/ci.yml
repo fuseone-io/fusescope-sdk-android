@@ -34,9 +34,9 @@ jobs:
         run: ./gradlew :sample:assembleRelease
       - name: Sample consumes published Maven artifacts
         run: |
-          ./gradlew :sample:assembleDebug -Pfusescope.sample.sdkVersion=0.1.0-beta.2
-          ./gradlew :sample:dependencies --configuration debugRuntimeClasspath -Pfusescope.sample.sdkVersion=0.1.0-beta.2 > published-sdk-dependencies.txt
-          grep -F 'io.fuseone.fusescope:android:0.1.0-beta.2' published-sdk-dependencies.txt
+          ./gradlew :sample:assembleDebug -Pfusescope.sample.sdkVersion=0.1.0-beta.3
+          ./gradlew :sample:dependencies --configuration debugRuntimeClasspath -Pfusescope.sample.sdkVersion=0.1.0-beta.3 > published-sdk-dependencies.txt
+          grep -F 'io.fuseone.fusescope:android:0.1.0-beta.3' published-sdk-dependencies.txt
           if grep -F 'project :sdk' published-sdk-dependencies.txt; then exit 1; fi
       - if: failure()
         uses: actions/upload-artifact@v4

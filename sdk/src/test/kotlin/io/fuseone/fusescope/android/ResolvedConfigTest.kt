@@ -25,6 +25,23 @@ class ResolvedConfigTest {
     }
 
     @Test
+    fun `one zero defaults preserve the beta privacy and collection choices`() {
+        val c = resolveConfig(base)
+        assertFalse(c.requireConsent)
+        assertFalse(c.diskBuffering)
+        assertFalse(c.installationId)
+        assertTrue(c.hashUserId)
+        assertEquals(InstrumentationsConfig(), c.instrumentations)
+        assertEquals(PrivacyConfig(), base.privacy)
+        assertTrue(c.instrumentations.crashes)
+        assertTrue(c.instrumentations.anrs)
+        assertTrue(c.instrumentations.views)
+        assertTrue(c.instrumentations.appStart)
+        assertFalse(c.instrumentations.lifecycleSpans)
+        assertFalse(c.instrumentations.slowRendering)
+    }
+
+    @Test
     fun `keeps a path prefix on the endpoint`() {
         val c = resolveConfig(base.copy(endpoint = "http://10.0.2.2:4399/fusescope"))
         assertEquals("http://10.0.2.2:4399/fusescope/rum/v1/logs", c.logsUrl)
