@@ -86,6 +86,11 @@ def install(directory: pathlib.Path, name: str) -> None:
     adb("shell", "pm", "clear", PACKAGE)
 
 
+def sampled_traceparent(header: str | None) -> bool:
+    match = re.fullmatch(r"00-([0-9a-f]{32})-([0-9a-f]{16})-([0-9a-f]{2})", header or "")
+    return bool(match and int(match[1], 16) and int(match[2], 16) and int(match[3], 16) & 1)
+
+
 def request(calls: list) -> str | None:
     before = len(calls)
     launch("request")
@@ -116,7 +121,7 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     time.sleep(2)
     launch("error")
     traceparent = request(calls)
-    assert traceparent and re.fullmatch(r"00-[0-9a-f]{32}-[0-9a-f]{16}-01", traceparent)
+    assert sampled_traceparent(traceparent), f"sampled request did not propagate a valid traceparent: {traceparent!r}"
     launch("flush")
     handled = wait_for(lambda: error(config, "manual"), "handled error did not reach real FuseScope", 90)
     first = handled["latestEvents"][0]
@@ -156,7 +161,7 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     (directory / "evidence" / "anr.json").write_text(json.dumps(anr, indent=2))
     (directory / "evidence" / "session.json").write_text(json.dumps(session, indent=2))
     return {"sessionContinuity": True, "views": [v["route"] for v in session["timeline"]],
-            "appStart": True, "hashedUser": True, "queryScrubbed": True, "traceparentMatchesRequestSpan": True,
+            "traceparent": traceparent, "appStart": True, "hashedUser": True, "queryScrubbed": True, "traceparentMatchesRequestSpan": True,
             "javaCrashSymbolicated": True, "anrSymbolicated": True}
 
 

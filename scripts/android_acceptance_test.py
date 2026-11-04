@@ -3,10 +3,17 @@
 import unittest
 from unittest.mock import patch
 
-from android_acceptance import error, quiet, timeline_events
+from android_acceptance import error, quiet, sampled_traceparent, timeline_events
 
 
 class AcceptanceOracleTest(unittest.TestCase):
+    def test_sampling_bit_is_independent_of_random_trace_id_flag(self):
+        prefix = "00-" + "a" * 32 + "-" + "b" * 16 + "-"
+        for flags in ("01", "03"):
+            self.assertTrue(sampled_traceparent(prefix + flags))
+        for header in (None, "malformed", prefix + "00", prefix + "02", "00-" + "0" * 32 + "-" + "b" * 16 + "-03"):
+            self.assertFalse(sampled_traceparent(header))
+
     @patch("android_acceptance.get")
     def test_zero_errors_are_not_enough_when_other_telemetry_was_ingested(self, get):
         get.return_value = {"counts": {"errors": 0}, "firstSeenAt": "2026-11-03T00:00:00Z", "rejections": []}
