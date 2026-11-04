@@ -3,7 +3,7 @@
 import unittest
 from unittest.mock import patch
 
-from android_acceptance import error, quiet, sampled_traceparent, timeline_events
+from android_acceptance import error, quiet, sampled_traceparent, session_ready, timeline_events
 
 
 class AcceptanceOracleTest(unittest.TestCase):
@@ -13,6 +13,14 @@ class AcceptanceOracleTest(unittest.TestCase):
             self.assertTrue(sampled_traceparent(prefix + flags))
         for header in (None, "malformed", prefix + "00", prefix + "02", "00-" + "0" * 32 + "-" + "b" * 16 + "-03"):
             self.assertFalse(sampled_traceparent(header))
+
+    @patch("android_acceptance.get")
+    def test_session_views_are_checked_separately_from_app_vital_storage(self, get):
+        session = {"timeline": [{"route": route} for route in ("HomeFragment", "DetailsFragment", "orders/{id}")], "requests": 1, "vitals": 0}
+        get.return_value = session
+        self.assertEqual(session, session_ready({}, "session"))
+        session["requests"] = 0
+        self.assertIsNone(session_ready({}, "session"))
 
     @patch("android_acceptance.get")
     def test_zero_errors_are_not_enough_when_other_telemetry_was_ingested(self, get):

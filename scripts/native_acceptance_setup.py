@@ -31,6 +31,13 @@ def test_setup(signoz, create_user_admin, get_token):
             scenarios[name] = {"endpoint": endpoint, "applicationId": scenario["id"], "key": scenario["key"]["key"], "token": token}
         _, editor_key = create_service_account_with_key(signoz, token, "android-acceptance-uploader", role="signoz-editor")
         scenarios["full"]["editorKey"] = editor_key
+        store = signoz.telemetrystore
+        host = store.container.host_configs["8123"]
+        scenarios["full"]["clickhouse"] = {
+            "endpoint": f"http://{host.address}:{host.port}",
+            "user": store.env["SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_USERNAME"],
+            "password": store.env["SIGNOZ_TELEMETRYSTORE_CLICKHOUSE_PASSWORD"],
+        }
         data["scenarios"] = scenarios
     config.write_text(json.dumps(data))
     config.chmod(0o600)

@@ -1,6 +1,7 @@
 """Exercise a Maven Android consumer against the real FuseScope/collector test stack."""
 
 import argparse
+import base64
 import hashlib
 import json
 import os
@@ -10,6 +11,9 @@ import shutil
 import subprocess
 import threading
 import time
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from native_acceptance import get
@@ -75,9 +79,31 @@ def timeline_events(session: dict) -> list[dict]:
 def session_ready(config: dict, session_id: str):
     session = get(config, "sessions/" + session_id)
     routes = {view["route"] for view in session["timeline"]}
-    if "orders/{id}" in routes and any("HomeFragment" in r for r in routes) and any("DetailsFragment" in r for r in routes) and session["requests"] >= 1 and session["vitals"] >= 1:
+    if "orders/{id}" in routes and any("HomeFragment" in r for r in routes) and any("DetailsFragment" in r for r in routes) and session["requests"] >= 1:
         return session
     return None
+
+
+def app_start(config: dict, session_id: str):
+    store = config["clickhouse"]
+    params = urllib.parse.urlencode({"param_application": config["applicationId"], "param_session": session_id})
+    query = """SELECT attributes_string['fusescope.rum.vital.name'] AS name,
+        attributes_number['fusescope.rum.vital.value'] AS value,
+        attributes_string['fusescope.rum.vital.unit'] AS unit,
+        attributes_string['fusescope.rum.vital.rating'] AS rating,
+        attributes_string['session.id'] AS sessionId,
+        resources_string['service.version'] AS release
+        FROM signoz_logs.distributed_logs_v2
+        WHERE resources_string['fusescope.rum.application.id'] = {application:String}
+          AND attributes_string['session.id'] = {session:String}
+          AND attributes_string['event.name'] = 'rum.vital'
+          AND attributes_string['fusescope.rum.vital.name'] = 'app_start'
+        LIMIT 20 FORMAT JSON"""
+    authorization = base64.b64encode(f"{store['user']}:{store['password']}".encode()).decode()
+    request = urllib.request.Request(store["endpoint"] + "?" + params, data=query.encode(), headers={"Authorization": "Basic " + authorization})
+    with urllib.request.urlopen(request, timeout=15) as response:
+        rows = json.load(response)["data"]
+    return rows if rows else None
 
 
 def install(directory: pathlib.Path, name: str) -> None:
@@ -127,13 +153,18 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     first = handled["latestEvents"][0]
     assert "secret" not in first["message"] and "token=" not in first["stacktrace"]
     session_id = first["sessionId"]
-    session = wait_for(lambda: session_ready(config, session_id), "views/request/app-start did not reach the session timeline", 90)
+    session = wait_for(lambda: session_ready(config, session_id), "views/request did not reach the session timeline", 90)
     (directory / "evidence" / "session.json").write_text(json.dumps(session, indent=2))
+    starts = wait_for(lambda: app_start(config, session_id), "actual app_start vital was not stored by the collector", 90)
+    assert all(row["name"] == "app_start" and row["unit"] == "ms" and row["value"] >= 0 for row in starts)
+    assert all(row["rating"] in ("good", "needs-improvement", "poor") and row["release"] == first["release"] for row in starts)
+    (directory / "evidence" / "app-start.json").write_text(json.dumps(starts, indent=2))
     assert session["userId"] == hashlib.sha256(b"sample-user").hexdigest()
     requests = [item["request"] for item in timeline_events(session) if item["kind"] == "request"]
     assert any(item["traceId"] == traceparent.split("-")[1] and item["spanId"] == traceparent.split("-")[2] for item in requests)
     assert all("secret" not in item["url"] and "?q=" not in item["url"] for item in requests)
     adb("shell", "am", "force-stop", PACKAGE)
+    launch()
     launch("error")
     launch("flush")
 
@@ -164,7 +195,7 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     (directory / "evidence" / "anr.json").write_text(json.dumps(anr, indent=2))
     (directory / "evidence" / "session.json").write_text(json.dumps(session, indent=2))
     return {"sessionContinuity": True, "views": [v["route"] for v in session["timeline"]],
-            "traceparent": traceparent, "appStart": True, "hashedUser": True, "queryScrubbed": True, "traceparentMatchesRequestSpan": True,
+            "traceparent": traceparent, "appStartStored": True, "appStartInSessionTimeline": session["vitals"] > 0, "hashedUser": True, "queryScrubbed": True, "traceparentMatchesRequestSpan": True,
             "javaCrashSymbolicated": True, "anrSymbolicated": True}
 
 
@@ -203,7 +234,10 @@ def verify_unsampled(config: dict, directory: pathlib.Path, calls: list) -> dict
     assert request(calls) is None
     launch("flush")
     quiet(config)
-    return {"sampleRate": 0, "noIngest": True, "noTraceparent": True}
+    xml = adb("shell", "run-as", PACKAGE, "cat", "shared_prefs/io.fuseone.fusescope.android.xml")
+    persisted = ET.fromstring(xml).findtext("string[@name='session']", "").split("|")
+    assert len(persisted) == 6 and persisted[-1] == "false", "confirm the SDK initialized and persisted an unsampled session"
+    return {"sampleRate": 0, "noIngest": True, "noTraceparent": True, "unsampledDecisionPersisted": True}
 
 
 def verify(config: dict, directory: pathlib.Path, version: str) -> None:
