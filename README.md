@@ -25,7 +25,9 @@ plugin. It follows `@fusescope/browser` and [ADR 0003](https://github.com/fuseon
 **Homologated, not mandatory.** This is the tested and recommended path, but FuseScope accepts any OTLP client.
 Clients configured by hand only need the attributes under [Data](#data).
 
-Status: 0.1.0 beta, built on upstream's alpha instrumentation; options may change before 1.0.
+Status: `0.1.0-beta.3` is published. Android 1.0 stabilization is tracked in
+[#189](https://github.com/fuseone-io/fusescope/issues/189); the API audit and release gates are recorded in
+[`docs/android-1.0-audit.md`](docs/android-1.0-audit.md). Upstream instrumentation includes alpha components.
 
 ## Install
 
@@ -95,7 +97,7 @@ Navigation destination named by its route template.
 |---|---|---|
 | `applicationId` | required | RUM application id (a UUID) from FuseScope's Setup screen. |
 | `key` | required | Public, write-only key (`rum_pub_…`). Safe to ship in an APK. |
-| `endpoint` | required | FuseScope base URL. Data goes to `<endpoint>/rum/v1/traces` and `<endpoint>/rum/v1/logs`. |
+| `endpoint` | required | FuseScope base URL, without embedded credentials, query or fragment. Data goes to `<endpoint>/rum/v1/traces` and `<endpoint>/rum/v1/logs`. |
 | `service` | — | `service.name`. Unset, the gateway names the service after the FuseScope application. |
 | `environment` | — | `deployment.environment.name`. |
 | `release` | `versionName` | `service.version`. Must equal the `release` of the mapping upload, which defaults to `versionName` too. |
@@ -323,6 +325,6 @@ for parsed native frames and grouping. It is not available in SDK `0.1.0-beta.2`
 
 The sample uses the SDK projects by default. To validate the actual Maven Central artifacts,
 build with `-Pfusescope.sample.sdkVersion=0.1.0-beta.3`. CI also checks this consumer path
-against the already published beta.2 before a new release. The manual `native-acceptance`
+against the already published beta.3 before a new release. The manual `native-acceptance`
 workflow exercises a published SDK against a real isolated FuseScope and collector, then
 checks the native event in the Errors UI.

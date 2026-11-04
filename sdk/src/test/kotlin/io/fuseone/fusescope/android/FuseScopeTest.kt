@@ -196,6 +196,39 @@ class FuseScopeTest {
     }
 
     @Test
+    fun `consent gates exported errors and propagation through grant revoke and resume`() {
+        repeat(20) { gateway.enqueue(MockResponse(code = 200)) }
+        repeat(3) { api.enqueue(MockResponse(code = 200)) }
+        val http = FuseScope.callFactory(OkHttpClient())
+        FuseScope.init(RuntimeEnvironment.getApplication(), config().copy(requireConsent = true))
+        FuseScope.addError(IllegalStateException("before consent"))
+        assertNull(get(http, api.url("/before-consent")))
+        drain()
+        assertEquals(0, requests.size)
+
+        FuseScope.setConsent(true)
+        FuseScope.addError(IllegalStateException("consented"))
+        assertNotNull(get(http, api.url("/consented")))
+        drain()
+        FuseScope.setConsent(false)
+        FuseScope.addError(IllegalStateException("after withdrawal"))
+        assertNull(get(http, api.url("/withdrawn")))
+        drain()
+        FuseScope.setConsent(true)
+        FuseScope.addError(IllegalStateException("resumed"))
+        drain()
+
+        val messages =
+            logs
+                .flatMap { it.resourceLogsList }
+                .flatMap { it.scopeLogsList }
+                .flatMap { it.logRecordsList }
+                .filter { it.attributesList.str("fusescope.rum.error.source") == "manual" }
+                .map { it.attributesList.str("exception.message") }
+        assertEquals(listOf("consented", "resumed"), messages)
+    }
+
+    @Test
     fun `requireConsent defers collection until consent`() {
         FuseScope.init(RuntimeEnvironment.getApplication(), config().copy(requireConsent = true))
         assertEquals(

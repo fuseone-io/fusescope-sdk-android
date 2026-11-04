@@ -1,0 +1,78 @@
+# Android 1.0 stabilization audit
+
+Tracking: [RUM E / #189](https://github.com/fuseone-io/fusescope/issues/189).
+Baseline: SDK main `94649af`, after native level-1 acceptance. This audit prepares 1.0;
+it does not claim that 1.0 has been released or that all acceptance gates have passed.
+
+## Public surface to preserve
+
+- `FuseScope`: `VERSION`, `init`, `setConsent`, `setUser`, `addError`, `addAction`,
+  `startView`, `callFactory`, `openTelemetry`, `flush`, `shutdown`.
+- Configuration: `FuseScopeConfig`, `PrivacyConfig`, `SessionConfig`,
+  `InstrumentationsConfig`, their existing constructor parameters, defaults and Java overloads.
+- Compose: `FuseScopeView`, `FuseScopeNavigationViews`, `NavController.trackFuseScopeViews`.
+- Gradle DSL: `fusescope` endpoint, applicationId, apiKey, release, uploadPath, enabled,
+  failOnError; property/environment fallbacks and per-variant upload task names.
+- Wire model: existing resource/session/view/error/vital attributes, gzip OTLP protobuf,
+  `FuseScope-RUM-Key`, `/rum/v1/traces` and `/rum/v1/logs`.
+- Mapping contract: Editor secret via `SigNoz-Api-Key`; application/release/map-ID matching.
+  Public RUM keys must never replace upload credentials.
+
+Java callers have a compile/run test for the facade and shortest constructor/method overloads.
+Internal implementation classes and compiler-generated helpers are not extension points.
+OpenTelemetry and OkHttp types appear in the facade; their pinned versions are part of the
+compatibility matrix, and dependency upgrades require renewed consumer validation.
+
+## Configuration and lifecycle review
+
+Defaults remain unchanged from beta.3: full-session sampling 1.0; consent opt-in;
+15-minute background timeout, 4-hour maximum; hashed users, no installation ID,
+query removal and no disk buffering. Crashes/native recovery, ANRs, views and app start
+are enabled; lifecycle spans and slow rendering are disabled. Regression tests protect
+these choices. `traceparentHosts` defaults to the endpoint host; an empty list disables
+propagation while retaining request spans. Unsampled sessions propagate no trace context.
+
+Invalid configuration is logged and ignored. Duplicate initialization is ignored;
+shutdown allows reinitialization. Consent withdrawal flushes previously collected data
+and stops collection; it does not retract prior exports. Collection resumes on a later
+grant. A new regression test checks actual error exports and request headers across
+withheld consent, grant, withdrawal and grant again, using a factory created before init.
+
+Finding: invalid endpoint diagnostics echoed query/fragment values, and endpoints with
+embedded credentials passed validation. The regression run
+[41747780762](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/41747780762)
+failed both new tests (53 SDK tests, 2 expected failures). Validation now parses the URL,
+rejects credentials and reports a fixed diagnostic without the supplied endpoint.
+Migration: remove userinfo from endpoints; authenticate with the existing public `key`.
+No constructor, default or wire-format change is required.
+
+## Tested baseline and remaining acceptance
+
+| Area | Existing coverage / evidence | 1.0 release gate |
+|---|---|---|
+| Sessions and sampling | SessionsTest, SamplingTest, FuseScopeTest | Real-backend session continuity and zero-sampling acceptance |
+| Consent and network | FuseScopeTest, ResolvedConfigTest; grant/revoke export/header regression | Exercise current sample with consent and propagation policy |
+| Views | AutoViewsTest; Compose route-template implementation | Activity/Fragment/Compose navigation in a real app |
+| Handled errors and privacy | FuseScopeTest, ExportersTest, ScrubTest, UserTest | Confirm scrubbed errors in Errors |
+| Java crash, ANR and R8 | ExportersTest; backend Android integration; Gradle uploader tests and R8 sample build | Real minified sample crash and ANR, upload actual matching mapping, retrace in Errors |
+| Native recovery | Real emulator/collector/Errors [41646520775](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/41646520775), beta.3/backend beta.2 | Re-run against the final published 1.0 artifacts |
+| Public API / consumer | Java facade test, defaults test, published beta.3 SDK + Compose consumer build | Verify all published 1.0 artifacts and plugin marker |
+
+The existing native acceptance archive is attached to backend `v0.159.0-beta.2`.
+Native ELF/DWARF symbolication is D level 2 (#188/#191), outside E's release gate.
+
+## Compatibility to carry into the release
+
+Verified baseline: SDK beta.3 on backend `0.159.0-beta.2`, JDK 21, Gradle wrapper
+9.7.1, AGP 9.4.0, Kotlin 2.4.10, compile SDK 37, runtime emulator API 35.
+SDK/Compose min SDK is 23; the sample uses 26. API 30 adds native exit metadata;
+API 31 adds available tombstone frames. Core-library desugaring is needed below API 26.
+The full-classpath dexing property remains required. OpenTelemetry Android is pinned to
+1.7.0 with Java 1.65.0 / instrumentation 2.31.1.
+
+Before release, replace this baseline with actual 1.0 evidence, update the existing
+README and public guides in `fusescope-docs`, and verify the advertised toolchain
+from workflow artifacts. Do not infer support for older AGP/Gradle or untested Android
+API levels solely from minSdk. Publish SDK, Compose, mappings plugin and marker as
+one aligned version only after these gates pass. Verify consumption from Maven Central
+and preserve source/version/digest and acceptance evidence before closing #189.
