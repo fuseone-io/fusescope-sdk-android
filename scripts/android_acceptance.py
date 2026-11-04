@@ -112,6 +112,8 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     time.sleep(2)
     launch("compose")
     time.sleep(3)
+    adb("shell", "input", "keyevent", "KEYCODE_BACK")
+    time.sleep(2)
     launch("error")
     traceparent = request(calls)
     assert traceparent and re.fullmatch(r"00-[0-9a-f]{32}-[0-9a-f]{16}-01", traceparent)
@@ -222,6 +224,15 @@ def verify(config: dict, directory: pathlib.Path, version: str) -> None:
             evidence["scenarios"][name] = check(*args, version) if name == "full" else check(*args)
             output.write_text(json.dumps(evidence, indent=2))
             print(f"Accepted: {name}", flush=True)
+    except Exception:
+        for name, scenario in config["scenarios"].items():
+            for route in ("status", "sessions", "errors"):
+                try:
+                    data = get(scenario, route)
+                    (directory / "evidence" / f"observed-{name}-{route}.json").write_text(json.dumps(data, indent=2))
+                except Exception:
+                    pass
+        raise
     finally:
         server.shutdown()
         server.server_close()
