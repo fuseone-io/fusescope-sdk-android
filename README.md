@@ -328,3 +328,22 @@ build with `-Pfusescope.sample.sdkVersion=0.1.0-beta.3`. CI also checks this con
 against the already published beta.3 before a new release. The manual `native-acceptance`
 workflow exercises a published SDK against a real isolated FuseScope and collector, then
 checks the native event in the Errors UI.
+
+For complete Android beta/release acceptance, dispatch the same workflow with
+`full_acceptance=true`:
+
+```bash
+gh workflow run native-acceptance.yml --repo fuseone-io/fusescope-sdk-android \
+  --ref main -f sdk_version=0.1.0-beta.3 -f full_acceptance=true
+```
+
+Use `--ref` to select an acceptance branch before it is merged. The workflow creates isolated
+applications for normal usage, consent and zero sampling; builds SDK/Compose consumers from Maven;
+uploads the actual R8 mapping with the source Gradle plugin; and checks native recovery, Java crashes,
+ANRs and Errors UI. The sample-only `fusescope.sample.requireConsent`, `sampleRate` and `propagate`
+properties configure these scenarios without changing SDK defaults.
+
+The backend image is pinned by digest and checked against `backend_ref`. App start is verified from
+actual collector storage: the backend session timeline currently omits Android `rum.vital` records
+([#312](https://github.com/fuseone-io/fusescope/issues/312)). The evidence records that limitation explicitly.
+See the [1.0 audit](docs/android-1.0-audit.md) for the accepted baseline and remaining publication gates.

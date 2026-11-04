@@ -76,3 +76,42 @@ from workflow artifacts. Do not infer support for older AGP/Gradle or untested A
 API levels solely from minSdk. Publish SDK, Compose, mappings plugin and marker as
 one aligned version only after these gates pass. Verify consumption from Maven Central
 and preserve source/version/digest and acceptance evidence before closing #189.
+
+## Beta.3 real-backend acceptance — 2026-11-03
+
+[Run 41757268235](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/41757268235)
+passed on acceptance source `d93f8ccf916ab1ef72db06fe6d8f850f7b760d1e` with Maven SDK/Compose
+`0.1.0-beta.3`, the source Gradle uploader, API 35 emulator and backend `0.159.0-beta.2`.
+The published backend image and its exact source are recorded in `versions.txt`.
+
+Accepted with real SDK signals through the backend gateway and collector:
+
+- Activity/Fragment views and Compose route `orders/{id}`, persisted session continuity after relaunch,
+  request spans correlated with received W3C trace context, hashed user and removed URL query values.
+- Stored `rum.vital` / `app_start`, with milliseconds, rating, original session and release.
+- A minified sample's uncaught Java exception and blocked-main-thread ANR, retraced through the R8
+  mapping uploaded by that exact build. The Java stack resolves `Checkout.pay`; the ANR resolves
+  `MainActivity` frames. Both have no missing-mapping warning.
+- Withheld consent, collection after grant, no new handled errors after withdrawal, collection after
+  another grant, and no propagation for an explicit empty host list.
+- Zero sampling: no ingest and no traceparent, plus a persisted unsampled session proving initialization.
+- Actual native SIGABRT recovery with original session/release/time and no duplicate after acknowledged
+  export and another relaunch. Three Playwright checks cover native, Java crash and ANR in Errors.
+
+The observed sampled header had flags `03`: the OpenTelemetry 1.65 API also represents the random-ID
+bit. The acceptance checks the sampled bit independently and verifies nonzero trace/span IDs against
+the stored request span. Six local oracle tests guard these checks and negative-scenario assertions.
+
+Evidence is preserved as
+[`android-beta3-full-acceptance.zip`](https://github.com/fuseone-io/fusescope/releases/download/v0.159.0-beta.2/android-beta3-full-acceptance.zip):
+JSON events/session/app-start, R8 map ID/hash, source/image manifest and Errors screenshots.
+Archive SHA-256: `9eac017f68f25dec5b50e8d78eea2153ace5bec7bc09a571ec574dbfac6e250f`.
+
+Known backend limitation: `appStartStored=true`, `appStartInSessionTimeline=false`. The timeline queries
+only browser vitals; Android app-start presentation is tracked separately in
+[#312](https://github.com/fuseone-io/fusescope/issues/312). This acceptance verifies storage directly
+and does not claim that missing presentation is delivered.
+
+The real-usage beta gate is now complete. Final 1.0 compatibility/migration documentation, publication
+of aligned SDK/Compose/plugin/marker artifacts and post-publication consumption/acceptance remain
+pending under #189. No 1.0 artifact is published by the acceptance workflow.
