@@ -343,7 +343,13 @@ uploads the actual R8 mapping with the source Gradle plugin; and checks native r
 ANRs and Errors UI. The sample-only `fusescope.sample.requireConsent`, `sampleRate` and `propagate`
 properties configure these scenarios without changing SDK defaults.
 
-The backend image is pinned by digest and checked against `backend_ref`. App start is verified from
-actual collector storage: the backend session timeline currently omits Android `rum.vital` records
-([#312](https://github.com/fuseone-io/fusescope/issues/312)). The evidence records that limitation explicitly.
-See the [1.0 audit](docs/android-1.0-audit.md) for the accepted baseline and remaining publication gates.
+Published-image mode pins a digest and checks it against `backend_ref`. To test an unmerged backend,
+set `backend_image=source` and `backend_ref` to its commit; the workflow builds the backend and frontend
+and records the image identity. With `full_acceptance=true`, `require_app_start_timeline=true` also
+requires the stored app start to appear with matching values/ratings in the session API and UI.
+
+Backend `0.159.0-beta.2` omits Android app starts from the timeline. The fix and real-sample acceptance
+are in [backend PR #313](https://github.com/fuseone-io/fusescope/pull/313), resolving
+[#312](https://github.com/fuseone-io/fusescope/issues/312) once merged and released. The existing beta.2
+acceptance remains reproducible without the strict flag. See the [1.0 audit](docs/android-1.0-audit.md)
+for the accepted baselines and remaining publication gates.

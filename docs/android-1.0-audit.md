@@ -115,3 +115,31 @@ and does not claim that missing presentation is delivered.
 The real-usage beta gate is now complete. Final 1.0 compatibility/migration documentation, publication
 of aligned SDK/Compose/plugin/marker artifacts and post-publication consumption/acceptance remain
 pending under #189. No 1.0 artifact is published by the acceptance workflow.
+
+
+## App-start timeline follow-up — #312
+
+[Run 41763544558](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/41763544558)
+passed using Maven SDK/Compose beta.3, an API 35 emulator and the source-built backend from
+[PR #313](https://github.com/fuseone-io/fusescope/pull/313). It required app start in both the session
+API and UI, while repeating native recovery, Java/ANR/R8, sessions/views, propagation/privacy,
+consent and zero sampling. All emulator scenarios and four Playwright checks passed.
+
+The session API now returns a leading `app_start` vital with the actual stored value/rating:
+`82.795066 ms`, `good`, rendered as `App start 83 ms`. Evidence records
+`requiresAppStartTimeline=true`, `appStartStored=true`, `appStartInSessionTimeline=true`.
+
+- Acceptance source: `e7db5b51fb8af838a735d6b79156cd4a41c6d621`.
+- Backend source: `28269fbb0109cd2569fd06ffc637b558c7a0cebb`.
+- Source-built image ID: `sha256:76e2d10f8d4bafe58ef8baf6cc84eb6934fc61a97bd4b7bf5e3d86fadd8919c9`.
+- Artifact: `native-release-acceptance`, including `session-app-start.png`, `session.json`,
+  `app-start.json`, `android-acceptance.json` and `versions.txt`.
+
+The backend's final follow-up `abeb32196` only changes an equivalent Go type conversion requested
+by lint; its Go tests and all 32 PR checks passed. PostgreSQL and SQLite each passed all 28 RUM
+integration tests; web-vital presentation was checked in both themes. Seven local acceptance-oracle
+tests passed, including rejection of a web-only vital counter in strict app-start mode.
+
+The published backend beta.2 baseline above still has the original limitation. E must use a backend
+release containing #313 before claiming timeline support in the final compatibility guide. Merge
+and backend publication, then final SDK 1.0 documentation/publication/consumption remain pending.
