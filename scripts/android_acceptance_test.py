@@ -38,6 +38,23 @@ class AcceptanceOracleTest(unittest.TestCase):
         with self.assertRaisesRegex(AssertionError, "no telemetry"):
             quiet({}, seconds=1)
 
+    @patch("android_acceptance.time.sleep")
+    @patch("android_acceptance.time.monotonic", side_effect=[0, 0, 2])
+    @patch("android_acceptance.get")
+    def test_consent_quiet_uses_ingested_errors_when_report_is_delayed(self, get, _clock, _sleep):
+        status = {"counts": {"errors": 0}, "firstSeenAt": None, "rejections": []}
+        get.side_effect = lambda _config, route: status if route == "status" else {"groups": [{"events": 1}]}
+        quiet({}, expected_errors=1, seconds=1)
+
+    @patch("android_acceptance.time.sleep")
+    @patch("android_acceptance.time.monotonic", side_effect=[0, 0])
+    @patch("android_acceptance.get")
+    def test_negative_consent_cannot_pass_on_a_stale_empty_report(self, get, _clock, _sleep):
+        status = {"counts": {"errors": 0}, "firstSeenAt": None, "rejections": []}
+        get.side_effect = lambda _config, route: status if route == "status" else {"groups": [{"events": 1}]}
+        with self.assertRaisesRegex(AssertionError, "telemetry escaped"):
+            quiet({}, seconds=1)
+
     @patch("android_acceptance.get")
     def test_rejected_ingest_cannot_pass_as_withheld_consent(self, get):
         get.return_value = {"counts": {"errors": 0}, "firstSeenAt": None, "rejections": [{"reason": "bad_key"}]}

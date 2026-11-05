@@ -55,6 +55,19 @@ backend fixtures. The old beta.2 baseline requires explicit backend ref/image an
 `collector_ingress=false`. Strict app-start timeline still requires a source/release
 containing #313. Historical backend-gateway evidence does not establish collector acceptance.
 
+### Older Android transport gate
+
+The library's minSdk remains 23. A direct connection to the collector's TLS-1.3-only
+listener needs a TLS-1.3-capable provider; Android's default provider supports it from
+API 29 ([official protocol matrix](https://developer.android.com/reference/javax/net/ssl/SSLSocket)).
+API 23–28 with the stock provider therefore cannot directly use that listener. API 35
+acceptance does not establish transport compatibility for that older range.
+
+Preserving older-device support needs an explicit approved transport strategy and
+on-device tests before the 1.0 compatibility claim is complete. No TLS downgrade,
+new provider dependency or minSdk change is made in this work. Record the decision
+under #189/#235; do not infer support from a successful compilation at minSdk 23.
+
 ## Migrating from beta.3
 
 1. When 1.0 is published, update SDK, optional Compose and optional mappings plugin

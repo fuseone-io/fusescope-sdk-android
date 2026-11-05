@@ -137,8 +137,12 @@ def quiet(config: dict, expected_errors: int = 0, seconds: int = 30) -> None:
     deadline = time.monotonic() + seconds
     while time.monotonic() < deadline:
         status = get(config, "status")
-        assert status["counts"]["errors"] == expected_errors, "telemetry escaped the consent/sampling gate"
+        # Collector setup reports arrive asynchronously; query actual ingested data too.
+        errors = sum(group["events"] for group in get(config, "errors").get("groups", []))
+        assert errors == expected_errors, "telemetry escaped the consent/sampling gate"
+        assert status["counts"]["errors"] <= expected_errors, "telemetry escaped the consent/sampling gate"
         if expected_errors == 0:
+            assert not get(config, "sessions").get("sessions", []), "no telemetry may be ingested before consent or for zero sampling"
             assert status["firstSeenAt"] is None, "no telemetry may be ingested before consent or for zero sampling"
         assert not status["rejections"], "invalid configuration/rejected ingest must not masquerade as collection being disabled"
         time.sleep(2)

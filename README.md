@@ -273,6 +273,12 @@ trusted by the consuming app. Do not disable certificate or hostname verificatio
 | 0.1.0-beta.2 | ≥ 0.156.0 (≥ 0.155.0 without per-build mappings) | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 | 0.1.0-beta.3 | ≥ 0.156.0 for existing signals; ≥ 0.159.0-beta.2 for native frames/grouping | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 
+**Transport requirement:** the collector listener requires TLS 1.3. Android's stock
+TLS provider supports it from API 29; library minSdk 23 does not by itself guarantee
+direct collector connectivity on API 23–28. The older-device strategy and acceptance
+remain a 1.0 release gate; see the migration guide. No SDK dependency or minimum API
+level is changed here.
+
 **Topology change:** server 0.159.0+ requires the new collector as RUM ingress
 (published collector 0.1.0 is the acceptance target). Older server minima above do not
 imply the ingest routes still exist on the backend in a newer release.
