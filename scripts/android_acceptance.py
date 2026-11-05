@@ -218,7 +218,7 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
             "javaCrashSymbolicated": True, "anrSymbolicated": True}
 
 
-def verify_consent(config: dict, directory: pathlib.Path, calls: list) -> dict:
+def verify_consent(config: dict, directory: pathlib.Path, calls: list, cycles: int = 1) -> dict:
     install(directory, "consent")
     launch("error")
     assert request(calls) is None
@@ -242,8 +242,20 @@ def verify_consent(config: dict, directory: pathlib.Path, calls: list) -> dict:
     launch("flush")
     resumed = wait_for(lambda: (detail if (detail := error(config, "manual")) and detail["events"] == 2 else None), "second grant did not resume collection", 90)
     assert len({e["sessionId"] for e in resumed["latestEvents"]}) == 1
+    observed_errors = 2
+    for _cycle in range(1, cycles):
+        launch("revoke")
+        time.sleep(12)
+        launch("error")
+        launch("flush")
+        quiet(config, expected_errors=observed_errors)
+        launch("consent")
+        launch("error")
+        launch("flush")
+        observed_errors += 1
+        wait_for(lambda: (detail if (detail := error(config, "manual")) and detail["events"] == observed_errors else None), "consent stress cycle did not resume collection", 90)
     return {"noIngestBeforeConsent": True, "noErrorsAfterWithdrawal": True,
-            "resumedAfterGrant": True, "emptyHostListDoesNotPropagate": True, "observedErrors": resumed["events"]}
+            "resumedAfterGrant": True, "emptyHostListDoesNotPropagate": True, "observedErrors": observed_errors, "consentCycles": cycles}
 
 
 def verify_unsampled(config: dict, directory: pathlib.Path, calls: list) -> dict:
@@ -286,7 +298,12 @@ def verify(config: dict, directory: pathlib.Path, version: str, require_app_star
             print(f"Real-backend Android acceptance: {name}", flush=True)
             args = (config["scenarios"][name], directory, calls)
             try:
-                evidence["scenarios"][name] = check(*args, version, require_app_start) if name == "full" else check(*args)
+                if name == "full":
+                    evidence["scenarios"][name] = check(*args, version, require_app_start)
+                elif name == "consent":
+                    evidence["scenarios"][name] = check(*args, cycles=int(os.environ.get("CONSENT_CYCLES", "1")))
+                else:
+                    evidence["scenarios"][name] = check(*args)
                 print(f"Accepted: {name}", flush=True)
             except Exception as failure:
                 failures.append(name)
