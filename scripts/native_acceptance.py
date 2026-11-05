@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import os
 import pathlib
 import subprocess
 import time
@@ -9,6 +10,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 
+from acceptance_transport import emulator_endpoint, sample_sdk_properties, sample_tls, verify_sdk_origin
 from native_smoke import PACKAGE, adb, launch, wait_for, wait_native_ack
 
 
@@ -36,12 +38,18 @@ def event(config: dict, source: str):
 
 
 def build(config: dict, version: str) -> None:
-    endpoint = config["endpoint"].replace("localhost", "10.0.2.2").replace("127.0.0.1", "10.0.2.2")
-    properties = [f"-Pfusescope.sample.sdkVersion={version}", f"-Pfusescope.sample.endpoint={endpoint}", f"-Pfusescope.sample.applicationId={config['applicationId']}", f"-Pfusescope.sample.key={config['key']}"]
+    with sample_tls(config):
+        _build(config, version)
+
+
+def _build(config: dict, version: str) -> None:
+    endpoint = emulator_endpoint(config)
+    properties = [*sample_sdk_properties(version), f"-Pfusescope.sample.endpoint={endpoint}", f"-Pfusescope.sample.applicationId={config['applicationId']}", f"-Pfusescope.sample.key={config['key']}"]
     subprocess.run(["./gradlew", ":sample:assembleDebug", *properties], check=True)
     report = subprocess.check_output(["./gradlew", ":sample:dependencies", "--configuration", "debugRuntimeClasspath", *properties], text=True)
-    assert f"io.fuseone.fusescope:android:{version}" in report
-    assert "project :sdk" not in report, "acceptance must consume the published SDK"
+    if directory := os.environ.get("NATIVE_ACCEPTANCE_DIR"):
+        (pathlib.Path(directory) / "evidence" / "native-sdk-dependencies.txt").write_text(report)
+    verify_sdk_origin(report, version)
 
 
 def verify(config: dict, version: str, output: pathlib.Path) -> None:
@@ -69,8 +77,7 @@ def verify(config: dict, version: str, output: pathlib.Path) -> None:
     assert crash["release"] == before["event"]["release"]
     assert crash["missingSourceMap"] is None and crash["symbolicated"] is False
     assert recovered["group"]["events"] == 1
-    status = get(config, "status")
-    assert status["sdk"]["version"] == version, "gateway did not observe the published SDK version"
+    wait_for(lambda: (get(config, "status").get("sdk") or {}).get("version") == version, "collector status report did not observe the published SDK version", 150)
     wait_native_ack(f"{round(timestamp * 1000)}:{pid}")
     adb("shell", "am", "force-stop", PACKAGE)
     launch()
@@ -78,8 +85,8 @@ def verify(config: dict, version: str, output: pathlib.Path) -> None:
     repeated = event(config, "native")
     assert repeated["group"]["events"] == 1 and repeated["event"]["id"] == crash["id"]
     output.mkdir(parents=True, exist_ok=True)
-    (output / "native-event.json").write_text(json.dumps({"sdkVersion": version, "crashTriggeredAt": crash_time, **recovered}, indent=2))
-    print("Published SDK: native SIGABRT grouped with frames, original session/release and no duplicate in FuseScope")
+    (output / "native-event.json").write_text(json.dumps({"sdkVersion": version, "sdkOrigin": "source" if os.environ.get("SDK_SOURCE") == "true" else "Maven Central", "crashTriggeredAt": crash_time, **recovered}, indent=2))
+    print("Native SIGABRT grouped with frames, original session/release and no duplicate in FuseScope")
 
 
 def main() -> None:

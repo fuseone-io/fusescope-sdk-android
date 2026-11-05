@@ -25,6 +25,23 @@ class ResolvedConfigTest {
     }
 
     @Test
+    fun `one zero defaults preserve the beta privacy and collection choices`() {
+        val c = resolveConfig(base)
+        assertFalse(c.requireConsent)
+        assertFalse(c.diskBuffering)
+        assertFalse(c.installationId)
+        assertTrue(c.hashUserId)
+        assertEquals(InstrumentationsConfig(), c.instrumentations)
+        assertEquals(PrivacyConfig(), base.privacy)
+        assertTrue(c.instrumentations.crashes)
+        assertTrue(c.instrumentations.anrs)
+        assertTrue(c.instrumentations.views)
+        assertTrue(c.instrumentations.appStart)
+        assertFalse(c.instrumentations.lifecycleSpans)
+        assertFalse(c.instrumentations.slowRendering)
+    }
+
+    @Test
     fun `keeps a path prefix on the endpoint`() {
         val c = resolveConfig(base.copy(endpoint = "http://10.0.2.2:4399/fusescope"))
         assertEquals("http://10.0.2.2:4399/fusescope/rum/v1/logs", c.logsUrl)
@@ -56,6 +73,22 @@ class ResolvedConfigTest {
         assertFalse(hosts.allows("fusescope.example.com"))
         assertTrue(resolveConfig(base.copy(traceparentHosts = listOf("*"))).traceparentHosts.allows("anything.io"))
         assertFalse(resolveConfig(base.copy(traceparentHosts = emptyList())).traceparentHosts.allows("fusescope.example.com"))
+    }
+
+    @Test
+    fun `invalid endpoint diagnostics never echo configuration secrets`() {
+        for (endpoint in listOf("https://example.com/?token=private-token", "https://example.com/#private-token")) {
+            val error = assertThrows(IllegalArgumentException::class.java) { resolveConfig(base.copy(endpoint = endpoint)) }
+            assertFalse(error.message.orEmpty().contains("private-token"))
+        }
+    }
+
+    @Test
+    fun `rejects endpoint credentials without echoing them`() {
+        for (endpoint in listOf("https://user:private-token@example.com", "https://private-token@example.com")) {
+            val error = assertThrows(IllegalArgumentException::class.java) { resolveConfig(base.copy(endpoint = endpoint)) }
+            assertFalse(error.message.orEmpty().contains("private-token"))
+        }
     }
 
     @Test

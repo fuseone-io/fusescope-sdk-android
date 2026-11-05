@@ -22,6 +22,9 @@ android {
         buildConfigField("String", "FUSESCOPE_ENDPOINT", "\"${setting("endpoint", "http://10.0.2.2:4399")}\"")
         buildConfigField("String", "FUSESCOPE_APPLICATION_ID", "\"${setting("applicationId", "0199c0de-0000-7000-8000-00000000a11d")}\"")
         buildConfigField("String", "FUSESCOPE_KEY", "\"${setting("key", "rum_pub_sample")}\"")
+        buildConfigField("boolean", "REQUIRE_CONSENT", setting("requireConsent", "false").toBoolean().toString())
+        buildConfigField("double", "SAMPLE_RATE", setting("sampleRate", "1.0").toDouble().toString())
+        buildConfigField("boolean", "PROPAGATE", setting("propagate", "true").toBoolean().toString())
         buildConfigField("String", "API_URL", "\"${setting("apiUrl", "http://10.0.2.2:4399/api/ping")}\"")
     }
 
@@ -57,7 +60,7 @@ kotlin {
 }
 
 fusescope {
-    endpoint.set(setting("endpoint", "http://localhost:4399").replace("10.0.2.2", "localhost"))
+    endpoint.set(setting("mappingEndpoint", setting("endpoint", "http://localhost:4399")).replace("10.0.2.2", "localhost"))
     applicationId.set(setting("applicationId", "0199c0de-0000-7000-8000-00000000a11d"))
     enabled.set(providers.gradleProperty("fusescope.sample.uploadMapping").map(String::toBoolean).orElse(false))
 }

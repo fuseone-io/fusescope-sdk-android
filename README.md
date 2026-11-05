@@ -25,7 +25,9 @@ plugin. It follows `@fusescope/browser` and [ADR 0003](https://github.com/fuseon
 **Homologated, not mandatory.** This is the tested and recommended path, but FuseScope accepts any OTLP client.
 Clients configured by hand only need the attributes under [Data](#data).
 
-Status: 0.1.0 beta, built on upstream's alpha instrumentation; options may change before 1.0.
+Status: `0.1.0-beta.3` is published. Android 1.0 stabilization is tracked in
+[#189](https://github.com/fuseone-io/fusescope/issues/189); the API audit and release gates are recorded in
+[`docs/android-1.0-audit.md`](docs/android-1.0-audit.md). Upstream instrumentation includes alpha components.
 
 ## Install
 
@@ -53,7 +55,7 @@ class ShopApp : Application() {
             FuseScopeConfig(
                 applicationId = "01a16431-12ca-7064-bae9-6ac64cf20a29", // Frontend › Applications › Setup
                 key = "rum_pub_…",
-                endpoint = "https://fusescope.example.com",
+                endpoint = "https://ingest.example.com",
                 environment = "production",
             ),
         )
@@ -95,7 +97,7 @@ Navigation destination named by its route template.
 |---|---|---|
 | `applicationId` | required | RUM application id (a UUID) from FuseScope's Setup screen. |
 | `key` | required | Public, write-only key (`rum_pub_…`). Safe to ship in an APK. |
-| `endpoint` | required | FuseScope base URL. Data goes to `<endpoint>/rum/v1/traces` and `<endpoint>/rum/v1/logs`. |
+| `endpoint` | required | Collector ingestion base URL on server 0.159.0+, without embedded credentials, query or fragment. Data goes to `<endpoint>/rum/v1/traces` and `<endpoint>/rum/v1/logs`. |
 | `service` | — | `service.name`. Unset, the gateway names the service after the FuseScope application. |
 | `environment` | — | `deployment.environment.name`. |
 | `release` | `versionName` | `service.version`. Must equal the `release` of the mapping upload, which defaults to `versionName` too. |
@@ -219,6 +221,12 @@ the record's own event-name field.
 
 ### Backend contract
 
+From backend `0.159.0`, RUM requests go to the Apache-2.0 **FuseScope collector**
+(repository `fusescope-collector-server`), not the backend API. The collector receives
+application/key policy over authenticated TLS OpAMP and applies the gateway behavior below.
+The backend queries and Errors UI remain on the management URL. Earlier server versions
+used the backend gateway. The SDK's paths, public-key header and OTLP payload stay the same.
+
 What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/fuseone-io/fusescope/blob/main/docs/adr/0003-real-user-monitoring.md), phase 3).
 
 1. **Platform.** `fusescope.rum.platform=android` on the resource; the gateway overwrites it from the application.
@@ -233,11 +241,27 @@ What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/f
    `fusescope.rum.android.version_code` is informative.
 6. **Stack traces** are raw Java traces (`\tat a.b.c(SourceFile:12)`), retraced when read. R8 names each
    obfuscated frame's file `r8-map-id-<pg_map_id>`, and the upload sends the same `map_id`.
-7. **Mapping upload.** `POST <endpoint>/api/v1/rum/applications/{applicationId}/mappings?release=<release>`
+7. **Mapping upload.** `POST <mappingEndpoint>/api/v1/rum/applications/{applicationId}/mappings?release=<release>`
    (path configurable with `uploadPath`), header `SigNoz-Api-Key: <Editor API key>`, `multipart/form-data`
    with `release`, `package_name`, `variant`, `version_code` and `map_id`, then the file part `file`
    (`filename="mapping.txt"`, `text/plain`). The server answers 201 with the mapping's `pg_map_id` as `debugId`;
    any 2xx is success.
+
+Mapping uploads still use the backend management API and its Editor key until the
+artifact-ingress migration (#234) is delivered. Configure the mappings plugin's
+`fusescope.endpoint` independently from `FuseScopeConfig.endpoint`; the former is the
+backend URL today, the latter is the collector URL. The sample exposes
+`-Pfusescope.sample.mappingEndpoint=<backend-url>` for that separation. A shared hostname
+only works if the proxy routes these paths to their respective services.
+
+The published beta.3 has a confirmed intermittent consent-withdrawal crash with TLS
+collector connections ([#336](https://github.com/fuseone-io/fusescope/issues/336)).
+The correction in SDK PR #9 closes exporters on workers while preserving completion
+results; it has passed source-candidate acceptance, but is not yet published. Earlier
+backend-gateway beta acceptance does not establish compatibility for that TLS flow.
+Withdrawal/shutdown flush pending data, so invoke them off the main thread; the sample
+already does this. The fix is still required because upstream batch callbacks can
+otherwise close a TLS connection on main even when withdrawal started on a worker.
 
 ## Gateway contract
 
@@ -246,6 +270,10 @@ What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/f
 - The public key in the **`FuseScope-RUM-Key`** header.
 - No CORS or `Origin`: requests come from the app, not a browser.
 
+On server 0.159.0+, these routes are served by the collector over TLS. The backend
+has no RUM handlers on those paths (the UI catch-all may return HTML). Use a trusted certificate; private CAs must be
+trusted by the consuming app. Do not disable certificate or hostname verification.
+
 ## Compatibility
 
 | io.fuseone.fusescope:android | FuseScope server | OpenTelemetry Android | OpenTelemetry Java |
@@ -253,6 +281,21 @@ What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/f
 | 0.1.0-beta.1 | ≥ 0.155.0 | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 | 0.1.0-beta.2 | ≥ 0.156.0 (≥ 0.155.0 without per-build mappings) | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 | 0.1.0-beta.3 | ≥ 0.156.0 for existing signals; ≥ 0.159.0-beta.2 for native frames/grouping | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
+
+**Transport requirement:** the collector listener requires TLS 1.3. Android's stock
+TLS provider supports it from API 29; library minSdk 23 does not by itself guarantee
+direct collector connectivity on API 23–28. The older-device strategy and acceptance
+remain a 1.0 release gate; see the migration guide. No SDK dependency or minimum API
+level is changed here.
+
+**Topology change:** server 0.159.0+ requires the new collector as RUM ingress
+(published collector 0.1.0 is the acceptance target). Older server minima above do not
+imply the ingest routes still exist on the backend in a newer release.
+
+The [Android 1.0 migration and compatibility guide](docs/android-1.0-migration.md)
+records the candidate toolchain, feature-specific backend requirements and aligned
+artifact verification. Version 1.0.0 is not published yet. App-start timeline support
+has passed source-build acceptance in backend PR #313; its backend release is pending.
 
 ## Contributing
 
@@ -323,6 +366,53 @@ for parsed native frames and grouping. It is not available in SDK `0.1.0-beta.2`
 
 The sample uses the SDK projects by default. To validate the actual Maven Central artifacts,
 build with `-Pfusescope.sample.sdkVersion=0.1.0-beta.3`. CI also checks this consumer path
-against the already published beta.2 before a new release. The manual `native-acceptance`
+against the already published beta.3 before a new release. The manual `native-acceptance`
 workflow exercises a published SDK against a real isolated FuseScope and collector, then
 checks the native event in the Errors UI.
+
+For complete Android beta/release acceptance, dispatch the same workflow with
+`full_acceptance=true`:
+
+```bash
+gh workflow run native-acceptance.yml --repo fuseone-io/fusescope-sdk-android \
+  --ref main -f sdk_version=0.1.0-beta.3 -f full_acceptance=true
+```
+
+Use `--ref` to select an acceptance branch before it is merged. The workflow creates isolated
+applications for normal usage, consent and zero sampling; builds SDK/Compose consumers from Maven;
+uploads the actual R8 mapping with the source Gradle plugin; and checks native recovery, Java crashes,
+ANRs and Errors UI. The sample-only `fusescope.sample.requireConsent`, `sampleRate` and `propagate`
+properties configure these scenarios without changing SDK defaults.
+
+Published-image mode pins a digest and checks it against `backend_ref`. To test an unmerged backend,
+set `backend_image=source` and `backend_ref` to its commit; the workflow builds the backend and frontend
+and records the image identity. With `full_acceptance=true`, `require_app_start_timeline=true` also
+requires the stored app start to appear with matching values/ratings in the session API and UI.
+
+Backend `0.159.0-beta.2` omits Android app starts from the timeline. The fix and real-sample acceptance
+are in [backend PR #313](https://github.com/fuseone-io/fusescope/pull/313), resolving
+[#312](https://github.com/fuseone-io/fusescope/issues/312) once merged and released. The existing beta.2
+acceptance remains reproducible with `collector_ingress=false` and explicit beta.2 backend ref/image, without the strict flag. See the [1.0 audit](docs/android-1.0-audit.md)
+for the accepted baselines and remaining publication gates.
+
+
+Acceptance defaults now target backend 0.159.0 and collector 0.1.0. Collector mode
+records image identity and proves the backend paths no longer accept OTLP; SDK events go
+to the collector while API queries/R8 uploads go to the backend. The emulator verifies
+the fixture certificate (including its bridge-IP SAN) using a test CA embedded only
+for sample builds; source resources are restored afterward. This is sample/test setup,
+not a change to SDK trust defaults. Final collector acceptance is recorded in the audit.
+
+
+To validate an unpublished SDK correction without a Maven release, explicitly set
+`source_sdk=true` and `sdk_version=1.0.0` in the acceptance workflow. It then verifies
+SDK/Compose project consumption, records `sdkOrigin=source` and the exact source SHA,
+and builds that candidate version locally. This is separate from Maven acceptance;
+default `source_sdk=false` still requires the published coordinates and rejects project
+substitution. `acceptance_scenarios=consent` is diagnostic-only; release-candidate
+coverage uses `all`. `consent_cycles=5` exercises repeated grant/withdraw/resume.
+
+[Collector acceptance 42086331484](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42086331484)
+passed all scenarios and four UI checks on API 35 with the corrected source candidate,
+collector 0.1.0 and backend source containing #313. See the audit for exact identities.
+Nothing was published by that run. API 23–28 transport remains a separate release gate.

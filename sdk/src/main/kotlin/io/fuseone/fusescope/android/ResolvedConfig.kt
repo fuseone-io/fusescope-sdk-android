@@ -1,6 +1,6 @@
 package io.fuseone.fusescope.android
 
-import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 internal const val KEY_HEADER = "FuseScope-RUM-Key"
 
@@ -28,8 +28,9 @@ private val ABSOLUTE_HTTP_URL = Regex("^https?://[^/?#\\s]+[^?#\\s]*$", RegexOpt
 internal fun resolveConfig(c: FuseScopeConfig): ResolvedConfig {
     require(c.applicationId.isNotBlank()) { "FuseScope: applicationId is required" }
     require(c.key.isNotBlank()) { "FuseScope: key is required" }
-    require(ABSOLUTE_HTTP_URL.matches(c.endpoint)) {
-        "FuseScope: endpoint must be an absolute http(s) URL without query or fragment, got \"${c.endpoint}\""
+    val endpoint = if (ABSOLUTE_HTTP_URL.matches(c.endpoint)) c.endpoint.toHttpUrlOrNull() else null
+    require(endpoint != null && endpoint.username.isEmpty() && endpoint.password.isEmpty()) {
+        "FuseScope: endpoint must be an absolute http(s) URL without credentials, query or fragment"
     }
     require(c.sessionSampleRate in 0.0..1.0) { "FuseScope: sessionSampleRate must be within [0, 1]" }
     require(c.session.inactivityTimeoutMillis > 0 && c.session.maxDurationMillis > 0) {
@@ -57,6 +58,6 @@ internal fun resolveConfig(c: FuseScopeConfig): ResolvedConfig {
         instrumentations = c.instrumentations,
         requireConsent = c.requireConsent,
         diskBuffering = c.diskBuffering,
-        traceparentHosts = TraceparentHosts(c.traceparentHosts ?: listOf(c.endpoint.toHttpUrl().host)),
+        traceparentHosts = TraceparentHosts(c.traceparentHosts ?: listOf(endpoint.host)),
     )
 }

@@ -4,17 +4,49 @@ on:
   workflow_dispatch:
     inputs:
       sdk_version:
-        description: Published Maven SDK version
+        description: Maven version, or candidate version when source_sdk is true
         required: true
         default: 0.1.0-beta.3
+      source_sdk:
+        description: Validate an unpublished source candidate instead of consuming Maven (not release evidence)
+        type: boolean
+        default: false
+      full_acceptance:
+        description: Also validate Android 1.0 sessions, consent, sampling, Compose, Java/ANR/R8 and Errors UI
+        type: boolean
+        required: false
+        default: false
+      require_app_start_timeline:
+        description: Require app_start in the session API and UI (backend must include issue 312)
+        type: boolean
+        required: false
+        default: false
+      consent_cycles:
+        description: Consent grant/withdrawal cycles (1 for baseline, 5 for stress diagnostics)
+        type: number
+        default: 1
+      acceptance_scenarios:
+        description: all for release evidence; consent for targeted failure diagnostics only
+        type: choice
+        options: [all, consent]
+        default: all
+      collector_ingress:
+        description: Use the new collector RUM ingress (requires backend 0.159.0+)
+        type: boolean
+        required: false
+        default: true
+      collector_version:
+        description: New collector image tag (image identity is recorded in evidence)
+        required: true
+        default: 0.1.0
       backend_ref:
         description: Backend release tag or full commit SHA
         required: true
-        default: v0.159.0-beta.2
+        default: v0.159.0
       backend_image:
-        description: Published backend image pinned by digest
+        description: Published image pinned by digest, or source to build backend_ref
         required: true
-        default: ghcr.io/fuseone-io/fusescope@sha256:629df47b6d940d2644722dd7e9cad363db3da2b58f06faf2ee9d2c3d20cd2a18
+        default: ghcr.io/fuseone-io/fusescope@sha256:75510a30346ae8697384774ea7124d2906d84cf930819e9b5917d23463052658
 
 permissions:
   contents: read
@@ -26,8 +58,16 @@ jobs:
     env:
       NATIVE_ACCEPTANCE_DIR: ${{ github.workspace }}/build/native-acceptance
       NATIVE_SCREENSHOT: ${{ github.workspace }}/build/native-acceptance/evidence/errors-native.png
+      FULL_ACCEPTANCE: ${{ inputs.full_acceptance }}
       SDK_VERSION: ${{ inputs.sdk_version }}
+      SDK_SOURCE: ${{ inputs.source_sdk }}
+      ORG_GRADLE_PROJECT_VERSION_NAME: ${{ inputs.sdk_version }}
+      REQUIRE_APP_START_TIMELINE: ${{ inputs.require_app_start_timeline }}
       BACKEND_IMAGE: ${{ inputs.backend_image }}
+      COLLECTOR_INGRESS: ${{ inputs.collector_ingress }}
+      COLLECTOR_VERSION: ${{ inputs.collector_version }}
+      ACCEPTANCE_SCENARIOS: ${{ inputs.acceptance_scenarios }}
+      CONSENT_CYCLES: ${{ inputs.consent_cycles }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -55,7 +95,10 @@ jobs:
       - name: Install backend test dependencies
         working-directory: backend/tests
         run: uv sync --frozen
+      - name: Validate acceptance options
+        run: test "$REQUIRE_APP_START_TIMELINE" != "true" || test "$FULL_ACCEPTANCE" = "true"
       - name: Verify published backend image matches source
+        if: inputs.backend_image != 'source'
         run: |
           docker pull "$BACKEND_IMAGE"
           expected=$(git -C backend rev-parse HEAD)
@@ -65,25 +108,44 @@ jobs:
         run: |
           mkdir -p "$NATIVE_ACCEPTANCE_DIR/evidence"
           cp scripts/native_acceptance_setup.py backend/tests/integration/tests/rum/99_native_acceptance_setup.py
+          cp scripts/acceptance_transport.py backend/tests/fixtures/acceptance_transport.py
           python - <<'PYCONFIG'
           from pathlib import Path
+          import os
           p = Path("backend/tests/integration/tests/rum/conftest.py")
-          marker = '"SIGNOZ_RUM_ENABLED": True,'
           source = p.read_text()
-          assert marker in source
-          # The published image serves /etc/signoz/web; the source-build fixture uses /root/web.
-          p.write_text(source.replace(marker, '"SIGNOZ_WEB_DIRECTORY": "/etc/signoz/web", ' + marker, 1))
+          # The negative-test fixture has tiny quotas; real R8 acceptance needs defaults.
+          source = "\n".join(line for line in source.splitlines() if '"SIGNOZ_RUM_SOURCEMAPS_' not in line) + "\n"
+          if os.environ["BACKEND_IMAGE"] != "source":
+              marker = 'env_overrides={'
+              assert marker in source
+              source = source.replace(marker, marker + '\n            "SIGNOZ_WEB_DIRECTORY": "/etc/signoz/web",', 1)
+          if os.environ["COLLECTOR_INGRESS"] == "true":
+              assert '"SIGNOZ_RUM_ENABLED"' not in source, "collector mode requires the migrated backend fixtures"
+              collector = Path("backend/tests/fixtures/fusescopecollector.py")
+              text = collector.read_text()
+              marker = 'issue_server_certificate(tls, "localhost", "127.0.0.1")'
+              assert marker in text
+              # Emulator bridge IP must verify against the real fixture certificate.
+              collector.write_text(text.replace(marker, 'issue_server_certificate(tls, "localhost", "127.0.0.1", "10.0.2.2")'))
+          p.write_text(source)
           PYCONFIG
           cd backend/tests
-          uv run pytest --basetemp=./tmp -vv --reuse --with-web --signoz-image "$BACKEND_IMAGE" integration/tests/rum/99_native_acceptance_setup.py
-      - name: Build sample against published SDK
+          image_args=()
+          if [ "$BACKEND_IMAGE" != "source" ]; then image_args=(--signoz-image "$BACKEND_IMAGE"); fi
+          if [ "$COLLECTOR_INGRESS" = "true" ]; then image_args+=(--fusescope-collector-version "$COLLECTOR_VERSION"); fi
+          uv run pytest --basetemp=./tmp -vv --reuse --with-web "${image_args[@]}" integration/tests/rum/99_native_acceptance_setup.py
+      - name: Build sample for the selected SDK origin
         run: python scripts/native_acceptance.py build --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
+      - name: Build complete Android acceptance scenarios
+        if: inputs.full_acceptance
+        run: python scripts/android_acceptance.py build --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Native crash reaches real FuseScope
+      - name: Verify selected Android scenarios against real FuseScope
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
@@ -91,20 +153,28 @@ jobs:
           arch: x86_64
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
-          script: python scripts/native_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
+          script: |
+            if [ "$ACCEPTANCE_SCENARIOS" = "all" ]; then python scripts/native_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"; fi
+            if [ "$FULL_ACCEPTANCE" = "true" ]; then if [ "$REQUIRE_APP_START_TIMELINE" = "true" ]; then python scripts/android_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION" --scenarios "$ACCEPTANCE_SCENARIOS" --require-app-start-timeline; else python scripts/android_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION" --scenarios "$ACCEPTANCE_SCENARIOS"; fi; fi
       - name: Verify Errors UI
+        if: inputs.acceptance_scenarios == 'all'
         run: |
           cp "$NATIVE_ACCEPTANCE_DIR/.env.local" backend/tests/e2e/.env.local
           cp scripts/native_acceptance.spec.ts backend/tests/e2e/tests/rum/native-release.spec.ts
+          if [ "$FULL_ACCEPTANCE" = "true" ]; then cp scripts/android_acceptance.spec.ts backend/tests/e2e/tests/rum/android-release.spec.ts; fi
           cd backend/tests/e2e
           pnpm install --frozen-lockfile
           pnpm exec playwright install --with-deps chromium
           pnpm exec playwright test tests/rum/native-release.spec.ts --project=chromium --no-deps --workers=1
+          if [ "$FULL_ACCEPTANCE" = "true" ]; then pnpm exec playwright test tests/rum/android-release.spec.ts --project=chromium --no-deps --workers=1; fi
       - name: Record source versions
         if: always()
         run: |
           mkdir -p "$NATIVE_ACCEPTANCE_DIR/evidence"
-          { echo "sdk_version=$SDK_VERSION"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; echo "backend_image=$BACKEND_IMAGE"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
+          { echo "sdk_version=$SDK_VERSION"; echo "source_sdk=$SDK_SOURCE"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; echo "backend_image=$BACKEND_IMAGE"; echo "require_app_start_timeline=$REQUIRE_APP_START_TIMELINE"; echo "collector_ingress=$COLLECTOR_INGRESS"; echo "collector_version=$COLLECTOR_VERSION"; echo "acceptance_scenarios=$ACCEPTANCE_SCENARIOS"; echo "consent_cycles=$CONSENT_CYCLES"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
+      - name: Record source-built image identity
+        if: always() && inputs.backend_image == 'source'
+        run: docker image inspect signoz:integration --format 'backend_image_id={{.Id}}' >> "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

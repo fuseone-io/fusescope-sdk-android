@@ -14,6 +14,9 @@ class SampleApp : Application() {
                 key = BuildConfig.FUSESCOPE_KEY,
                 endpoint = BuildConfig.FUSESCOPE_ENDPOINT,
                 environment = "sample",
+                requireConsent = BuildConfig.REQUIRE_CONSENT,
+                sessionSampleRate = BuildConfig.SAMPLE_RATE,
+                traceparentHosts = if (BuildConfig.PROPAGATE) null else emptyList(),
             ),
         )
         FuseScope.setUser("sample-user")
