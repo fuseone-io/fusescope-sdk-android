@@ -9,6 +9,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 
+from acceptance_transport import emulator_endpoint, sample_tls
 from native_smoke import PACKAGE, adb, launch, wait_for, wait_native_ack
 
 
@@ -36,7 +37,12 @@ def event(config: dict, source: str):
 
 
 def build(config: dict, version: str) -> None:
-    endpoint = config["endpoint"].replace("localhost", "10.0.2.2").replace("127.0.0.1", "10.0.2.2")
+    with sample_tls(config):
+        _build(config, version)
+
+
+def _build(config: dict, version: str) -> None:
+    endpoint = emulator_endpoint(config)
     properties = [f"-Pfusescope.sample.sdkVersion={version}", f"-Pfusescope.sample.endpoint={endpoint}", f"-Pfusescope.sample.applicationId={config['applicationId']}", f"-Pfusescope.sample.key={config['key']}"]
     subprocess.run(["./gradlew", ":sample:assembleDebug", *properties], check=True)
     report = subprocess.check_output(["./gradlew", ":sample:dependencies", "--configuration", "debugRuntimeClasspath", *properties], text=True)
@@ -69,8 +75,7 @@ def verify(config: dict, version: str, output: pathlib.Path) -> None:
     assert crash["release"] == before["event"]["release"]
     assert crash["missingSourceMap"] is None and crash["symbolicated"] is False
     assert recovered["group"]["events"] == 1
-    status = get(config, "status")
-    assert status["sdk"]["version"] == version, "gateway did not observe the published SDK version"
+    wait_for(lambda: (get(config, "status").get("sdk") or {}).get("version") == version, "collector status report did not observe the published SDK version", 150)
     wait_native_ack(f"{round(timestamp * 1000)}:{pid}")
     adb("shell", "am", "force-stop", PACKAGE)
     launch()

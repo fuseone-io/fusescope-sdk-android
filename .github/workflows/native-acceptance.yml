@@ -17,14 +17,23 @@ on:
         type: boolean
         required: false
         default: false
+      collector_ingress:
+        description: Use the new collector RUM ingress (requires backend 0.159.0+)
+        type: boolean
+        required: false
+        default: true
+      collector_version:
+        description: New collector image tag (image identity is recorded in evidence)
+        required: true
+        default: 0.1.0
       backend_ref:
         description: Backend release tag or full commit SHA
         required: true
-        default: v0.159.0-beta.2
+        default: v0.159.0
       backend_image:
         description: Published image pinned by digest, or source to build backend_ref
         required: true
-        default: ghcr.io/fuseone-io/fusescope@sha256:629df47b6d940d2644722dd7e9cad363db3da2b58f06faf2ee9d2c3d20cd2a18
+        default: ghcr.io/fuseone-io/fusescope@sha256:75510a30346ae8697384774ea7124d2906d84cf930819e9b5917d23463052658
 
 permissions:
   contents: read
@@ -40,6 +49,8 @@ jobs:
       SDK_VERSION: ${{ inputs.sdk_version }}
       REQUIRE_APP_START_TIMELINE: ${{ inputs.require_app_start_timeline }}
       BACKEND_IMAGE: ${{ inputs.backend_image }}
+      COLLECTOR_INGRESS: ${{ inputs.collector_ingress }}
+      COLLECTOR_VERSION: ${{ inputs.collector_version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -84,19 +95,27 @@ jobs:
           from pathlib import Path
           import os
           p = Path("backend/tests/integration/tests/rum/conftest.py")
-          marker = '"SIGNOZ_RUM_ENABLED": True,'
           source = p.read_text()
-          assert marker in source
-          # The negative-test fixture uses tiny artifact quotas. Acceptance uses production defaults.
+          # The negative-test fixture has tiny quotas; real R8 acceptance needs defaults.
           source = "\n".join(line for line in source.splitlines() if '"SIGNOZ_RUM_SOURCEMAPS_' not in line) + "\n"
-          # The published image serves /etc/signoz/web; the source-build fixture uses /root/web.
           if os.environ["BACKEND_IMAGE"] != "source":
-              source = source.replace(marker, '"SIGNOZ_WEB_DIRECTORY": "/etc/signoz/web", ' + marker, 1)
+              marker = 'env_overrides={'
+              assert marker in source
+              source = source.replace(marker, marker + '\n            "SIGNOZ_WEB_DIRECTORY": "/etc/signoz/web",', 1)
+          if os.environ["COLLECTOR_INGRESS"] == "true":
+              assert '"SIGNOZ_RUM_ENABLED"' not in source, "collector mode requires the migrated backend fixtures"
+              collector = Path("backend/tests/fixtures/fusescopecollector.py")
+              text = collector.read_text()
+              marker = 'issue_server_certificate(tls, "localhost", "127.0.0.1")'
+              assert marker in text
+              # Emulator bridge IP must verify against the real fixture certificate.
+              collector.write_text(text.replace(marker, 'issue_server_certificate(tls, "localhost", "127.0.0.1", "10.0.2.2")'))
           p.write_text(source)
           PYCONFIG
           cd backend/tests
           image_args=()
           if [ "$BACKEND_IMAGE" != "source" ]; then image_args=(--signoz-image "$BACKEND_IMAGE"); fi
+          if [ "$COLLECTOR_INGRESS" = "true" ]; then image_args+=(--fusescope-collector-version "$COLLECTOR_VERSION"); fi
           uv run pytest --basetemp=./tmp -vv --reuse --with-web "${image_args[@]}" integration/tests/rum/99_native_acceptance_setup.py
       - name: Build sample against published SDK
         run: python scripts/native_acceptance.py build --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
@@ -133,7 +152,7 @@ jobs:
         if: always()
         run: |
           mkdir -p "$NATIVE_ACCEPTANCE_DIR/evidence"
-          { echo "sdk_version=$SDK_VERSION"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; echo "backend_image=$BACKEND_IMAGE"; echo "require_app_start_timeline=$REQUIRE_APP_START_TIMELINE"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
+          { echo "sdk_version=$SDK_VERSION"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; echo "backend_image=$BACKEND_IMAGE"; echo "require_app_start_timeline=$REQUIRE_APP_START_TIMELINE"; echo "collector_ingress=$COLLECTOR_INGRESS"; echo "collector_version=$COLLECTOR_VERSION"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
       - name: Record source-built image identity
         if: always() && inputs.backend_image == 'source'
         run: docker image inspect signoz:integration --format 'backend_image_id={{.Id}}' >> "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"

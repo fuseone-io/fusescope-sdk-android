@@ -16,20 +16,27 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
+from acceptance_transport import emulator_endpoint, sample_tls
 from native_acceptance import get
 from native_smoke import PACKAGE, adb, launch, wait_for
 
 
 def build(config: dict, version: str, directory: pathlib.Path) -> None:
+    with sample_tls(config):
+        _build(config, version, directory)
+
+
+def _build(config: dict, version: str, directory: pathlib.Path) -> None:
     apks = directory / "apks"
     apks.mkdir(exist_ok=True)
     debug = pathlib.Path("sample/build/outputs/apk/debug/sample-debug.apk")
     shutil.copyfile(debug, apks / "native.apk")
     try:
         for name, scenario in config["scenarios"].items():
-            endpoint = scenario["endpoint"].replace("localhost", "10.0.2.2").replace("127.0.0.1", "10.0.2.2")
+            endpoint = emulator_endpoint(scenario)
             properties = [
                 f"-Pfusescope.sample.sdkVersion={version}", f"-Pfusescope.sample.endpoint={endpoint}",
+                f"-Pfusescope.sample.mappingEndpoint={scenario['endpoint']}",
                 f"-Pfusescope.sample.applicationId={scenario['applicationId']}", f"-Pfusescope.sample.key={scenario['key']}",
                 f"-Pfusescope.sample.requireConsent={str(name == 'consent').lower()}",
                 f"-Pfusescope.sample.sampleRate={0.0 if name == 'unsampled' else 1.0}",

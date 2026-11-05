@@ -1,0 +1,39 @@
+"""Transport settings for the acceptance sample; production SDK TLS stays unchanged."""
+from contextlib import contextmanager
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def emulator_endpoint(config):
+    return config.get('ingestionEndpoint', config['endpoint']).replace('localhost', '10.0.2.2').replace('127.0.0.1', '10.0.2.2')
+
+
+@contextmanager
+def sample_tls(config, root=ROOT):
+    if not config.get('caCertFile'):
+        yield
+        return
+    path = root / 'sample/src/main/res/xml/network_security_config.xml'
+    resource = root / 'sample/src/main/res/raw/fusescope_acceptance_ca.pem'
+    original = path.read_bytes()
+    previous_ca = resource.read_bytes() if resource.exists() else None
+    document = ET.fromstring(original)
+    base = document.find('base-config')
+    if base is None:
+        base = ET.SubElement(document, 'base-config', {'cleartextTrafficPermitted': 'false'})
+    anchors = ET.SubElement(base, 'trust-anchors')
+    ET.SubElement(anchors, 'certificates', {'src': 'system'})
+    ET.SubElement(anchors, 'certificates', {'src': '@raw/fusescope_acceptance_ca'})
+    resource.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        resource.write_bytes(Path(config['caCertFile']).read_bytes())
+        path.write_bytes(ET.tostring(document, encoding='utf-8', xml_declaration=True))
+        yield
+    finally:
+        path.write_bytes(original)
+        if previous_ca is None:
+            resource.unlink(missing_ok=True)
+        else:
+            resource.write_bytes(previous_ca)

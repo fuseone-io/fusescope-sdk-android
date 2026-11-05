@@ -60,7 +60,7 @@ kotlin {
 }
 
 fusescope {
-    endpoint.set(setting("endpoint", "http://localhost:4399").replace("10.0.2.2", "localhost"))
+    endpoint.set(setting("mappingEndpoint", setting("endpoint", "http://localhost:4399")).replace("10.0.2.2", "localhost"))
     applicationId.set(setting("applicationId", "0199c0de-0000-7000-8000-00000000a11d"))
     enabled.set(providers.gradleProperty("fusescope.sample.uploadMapping").map(String::toBoolean).orElse(false))
 }
