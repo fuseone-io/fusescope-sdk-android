@@ -143,3 +143,30 @@ tests passed, including rejection of a web-only vital counter in strict app-star
 The published backend beta.2 baseline above still has the original limitation. E must use a backend
 release containing #313 before claiming timeline support in the final compatibility guide. Merge
 and backend publication, then final SDK 1.0 documentation/publication/consumption remain pending.
+
+
+## Release preparation follow-up — 2026-11-04
+
+The [migration and compatibility guide](android-1.0-migration.md) now records the
+actual toolchain, unchanged public/default/wire contracts, endpoint and older-beta
+migration notes, feature-specific backend requirements, and release completion steps.
+The public Android guide has a companion update on `docs/189-android-1.0` in
+`fusescope-docs`. The released backend minimum for app-start timeline remains pending
+#313; preparing the guide does not require publishing that backend now.
+
+CI now publishes all four candidate coordinates as `1.0.0` to a temporary local Maven
+repository and runs `scripts/release_consumer.py`. The isolated consumer uses no
+included plugin build or SDK/Compose project dependencies. It verifies POM versions,
+Compose→SDK and marker→plugin references, resolves SDK/Compose/plugin from the chosen
+repository, builds the R8 release sample and records dependency/plugin reports.
+Ten local oracle tests pass, including rejection of mismatched versions and source
+substitution configuration. Central publication/availability and final 1.0 real-backend
+acceptance remain release gates; the local candidate is not a published release.
+
+
+Validation: [CI 41941627480](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/41941627480)
+passed both build and instrumented jobs on `fd59574`. The `release-consumer-candidate`
+artifact records all four `1.0.0` coordinates and `releaseBuild=passed`; SDK/Compose
+runtime and plugin build-environment reports confirm exact Maven resolution. The
+minified isolated consumer built successfully. Candidate checks are local-only; no
+Central release was dispatched.
