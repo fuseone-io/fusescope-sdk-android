@@ -1,6 +1,7 @@
 """Transport settings for the acceptance sample; production SDK TLS stays unchanged."""
 from contextlib import contextmanager
 import os
+import re
 from pathlib import Path
 import xml.etree.ElementTree as ET
 
@@ -52,13 +53,18 @@ def sample_sdk_properties(version):
     return [] if os.environ.get('SDK_SOURCE') == 'true' else [f'-Pfusescope.sample.sdkVersion={version}']
 
 
+def source_sdk_projects(report):
+    return set(re.findall(r"\bproject\s+['\"]?:(sdk|compose)\b", report))
+
+
 def verify_sdk_origin(report, version, compose=False):
     artifacts = ('android', 'android-compose') if compose else ('android',)
+    projects = source_sdk_projects(report)
     if os.environ.get('SDK_SOURCE') == 'true':
-        assert 'project :sdk' in report, 'candidate acceptance must consume SDK source'
+        assert 'sdk' in projects, 'candidate acceptance must consume SDK source'
         if compose:
-            assert 'project :compose' in report
+            assert 'compose' in projects
     else:
         for artifact in artifacts:
             assert f'io.fuseone.fusescope:{artifact}:{version}' in report
-        assert 'project :sdk' not in report, 'release acceptance must consume published artifacts'
+        assert not projects, 'release acceptance must consume published artifacts'

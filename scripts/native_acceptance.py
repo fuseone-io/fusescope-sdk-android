@@ -47,6 +47,8 @@ def _build(config: dict, version: str) -> None:
     properties = [*sample_sdk_properties(version), f"-Pfusescope.sample.endpoint={endpoint}", f"-Pfusescope.sample.applicationId={config['applicationId']}", f"-Pfusescope.sample.key={config['key']}"]
     subprocess.run(["./gradlew", ":sample:assembleDebug", *properties], check=True)
     report = subprocess.check_output(["./gradlew", ":sample:dependencies", "--configuration", "debugRuntimeClasspath", *properties], text=True)
+    if directory := os.environ.get("NATIVE_ACCEPTANCE_DIR"):
+        (pathlib.Path(directory) / "evidence" / "native-sdk-dependencies.txt").write_text(report)
     verify_sdk_origin(report, version)
 
 

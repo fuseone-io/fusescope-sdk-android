@@ -8,6 +8,8 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from acceptance_transport import source_sdk_projects
+
 ROOT = Path(__file__).resolve().parents[1]
 GROUP = 'io.fuseone.fusescope'
 PLUGIN = GROUP + '.android.mappings'
@@ -88,7 +90,7 @@ def main():
         result = subprocess.run(command + [task] + extra, check=True, text=True, stdout=subprocess.PIPE)
         report = result.stdout
         (args.output / (task.rsplit(':', 1)[-1] + '.txt')).write_text(report)
-        if 'FAILED' in report or 'project :sdk' in report or 'project :compose' in report:
+        if 'FAILED' in report or source_sdk_projects(report):
             raise ValueError(f'Unresolved or source-substituted dependencies in {task}')
         for coordinate in expected:
             if coordinate not in report or re.search(re.escape(coordinate) + r' -> (?!' + re.escape(args.version) + r'(?:\s|$))', report):

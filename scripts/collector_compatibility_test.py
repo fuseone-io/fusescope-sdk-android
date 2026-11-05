@@ -15,7 +15,7 @@ class CollectorCompatibilityTest(unittest.TestCase):
         self.assertIn('-Pfusescope.sample.endpoint=https://10.0.2.2:4319', run.call_args.args[0])
 
     @patch.dict('os.environ', {'SDK_SOURCE': 'true'})
-    @patch('native_acceptance.subprocess.check_output', return_value='project :sdk\nproject :compose')
+    @patch('native_acceptance.subprocess.check_output', return_value="project ':sdk'\nproject ':compose'")
     @patch('native_acceptance.subprocess.run')
     def test_unpublished_fix_can_be_verified_as_an_explicit_source_consumer(self, run, _report):
         native_acceptance.build({'endpoint': 'http://127.0.0.1:8080', 'ingestionEndpoint': 'https://127.0.0.1:4319', 'applicationId': 'app', 'key': 'test'}, '1.0.0')

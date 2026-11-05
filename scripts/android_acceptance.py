@@ -52,6 +52,7 @@ def _build(config: dict, version: str, directory: pathlib.Path) -> None:
                 ["./gradlew", ":sample:dependencies", "--configuration", variant.lower() + "RuntimeClasspath", *properties],
                 text=True,
             )
+            (directory / "evidence" / f"{name}-sdk-dependencies.txt").write_text(report)
             verify_sdk_origin(report, version, compose=True)
             apk = pathlib.Path(f"sample/build/outputs/apk/{variant.lower()}/sample-{variant.lower()}.apk")
             shutil.copyfile(apk, apks / f"{name}.apk")
