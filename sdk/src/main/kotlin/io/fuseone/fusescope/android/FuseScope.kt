@@ -51,7 +51,7 @@ public object FuseScope {
         start()
     }
 
-    /** Grants (starts collection) or withdraws (flushes and stops it) the user's consent. */
+    /** Grants collection or withdraws it; withdrawal flushes pending data, so call it off the main thread. */
     @JvmStatic
     @Synchronized
     public fun setConsent(granted: Boolean) {
@@ -125,7 +125,7 @@ public object FuseScope {
         rum?.flush()
     }
 
-    /** Flushes and stops collection; [init] may be called again afterwards. */
+    /** Flushes and stops collection off the main thread; [init] may be called again afterwards. */
     @JvmStatic
     @Synchronized
     public fun shutdown() {

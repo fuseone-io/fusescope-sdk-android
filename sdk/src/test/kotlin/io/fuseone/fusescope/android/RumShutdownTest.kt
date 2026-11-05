@@ -60,6 +60,20 @@ class RumShutdownTest {
     }
 
     @Test
+    fun `shutdown propagates delegate failure`() {
+        val result = shutdownExporter { CompletableResultCode.ofFailure() }
+        assertTrue(result.join(5, TimeUnit.SECONDS).isDone)
+        assertFalse(result.isSuccess)
+    }
+
+    @Test
+    fun `shutdown exceptions fail the result without crashing the worker`() {
+        val result = shutdownExporter { throw IllegalStateException("close failed") }
+        assertTrue(result.join(5, TimeUnit.SECONDS).isDone)
+        assertFalse(result.isSuccess)
+    }
+
+    @Test
     fun `withdrawal closes network exporters off the main thread`() {
         val emitted = CountDownLatch(1)
         val closed = CountDownLatch(2)

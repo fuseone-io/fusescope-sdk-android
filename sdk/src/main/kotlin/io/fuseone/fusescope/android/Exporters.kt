@@ -34,7 +34,7 @@ internal class RumSpanExporter(
 
     override fun flush(): CompletableResultCode = delegate.flush()
 
-    override fun shutdown(): CompletableResultCode = delegate.shutdown()
+    override fun shutdown(): CompletableResultCode = shutdownExporter(delegate::shutdown)
 }
 
 /**
@@ -86,7 +86,7 @@ internal class RumLogExporter(
 
     override fun flush(): CompletableResultCode = delegate.flush()
 
-    override fun shutdown(): CompletableResultCode = delegate.shutdown()
+    override fun shutdown(): CompletableResultCode = shutdownExporter(delegate::shutdown)
 }
 
 internal const val ANR_TYPE = "ANR"

@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       sdk_version:
-        description: Published Maven SDK version
+        description: Maven version, or candidate version when source_sdk is true
         required: true
         default: 0.1.0-beta.3
       source_sdk:
@@ -135,7 +135,7 @@ jobs:
           if [ "$BACKEND_IMAGE" != "source" ]; then image_args=(--signoz-image "$BACKEND_IMAGE"); fi
           if [ "$COLLECTOR_INGRESS" = "true" ]; then image_args+=(--fusescope-collector-version "$COLLECTOR_VERSION"); fi
           uv run pytest --basetemp=./tmp -vv --reuse --with-web "${image_args[@]}" integration/tests/rum/99_native_acceptance_setup.py
-      - name: Build sample against published SDK
+      - name: Build sample for the selected SDK origin
         run: python scripts/native_acceptance.py build --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
       - name: Build complete Android acceptance scenarios
         if: inputs.full_acceptance
@@ -145,7 +145,7 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
-      - name: Native crash reaches real FuseScope
+      - name: Verify selected Android scenarios against real FuseScope
         uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 35
