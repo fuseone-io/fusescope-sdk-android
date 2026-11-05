@@ -55,7 +55,7 @@ class ShopApp : Application() {
             FuseScopeConfig(
                 applicationId = "01a16431-12ca-7064-bae9-6ac64cf20a29", // Frontend › Applications › Setup
                 key = "rum_pub_…",
-                endpoint = "https://fusescope.example.com",
+                endpoint = "https://ingest.example.com",
                 environment = "production",
             ),
         )
@@ -97,7 +97,7 @@ Navigation destination named by its route template.
 |---|---|---|
 | `applicationId` | required | RUM application id (a UUID) from FuseScope's Setup screen. |
 | `key` | required | Public, write-only key (`rum_pub_…`). Safe to ship in an APK. |
-| `endpoint` | required | FuseScope base URL, without embedded credentials, query or fragment. Data goes to `<endpoint>/rum/v1/traces` and `<endpoint>/rum/v1/logs`. |
+| `endpoint` | required | Collector ingestion base URL on server 0.159.0+, without embedded credentials, query or fragment. Data goes to `<endpoint>/rum/v1/traces` and `<endpoint>/rum/v1/logs`. |
 | `service` | — | `service.name`. Unset, the gateway names the service after the FuseScope application. |
 | `environment` | — | `deployment.environment.name`. |
 | `release` | `versionName` | `service.version`. Must equal the `release` of the mapping upload, which defaults to `versionName` too. |
@@ -221,6 +221,12 @@ the record's own event-name field.
 
 ### Backend contract
 
+From backend `0.159.0`, RUM requests go to the Apache-2.0 **FuseScope collector**
+(repository `fusescope-collector-server`), not the backend API. The collector receives
+application/key policy over authenticated TLS OpAMP and applies the gateway behavior below.
+The backend queries and Errors UI remain on the management URL. Earlier server versions
+used the backend gateway. The SDK's paths, public-key header and OTLP payload stay the same.
+
 What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/fuseone-io/fusescope/blob/main/docs/adr/0003-real-user-monitoring.md), phase 3).
 
 1. **Platform.** `fusescope.rum.platform=android` on the resource; the gateway overwrites it from the application.
@@ -235,11 +241,18 @@ What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/f
    `fusescope.rum.android.version_code` is informative.
 6. **Stack traces** are raw Java traces (`\tat a.b.c(SourceFile:12)`), retraced when read. R8 names each
    obfuscated frame's file `r8-map-id-<pg_map_id>`, and the upload sends the same `map_id`.
-7. **Mapping upload.** `POST <endpoint>/api/v1/rum/applications/{applicationId}/mappings?release=<release>`
+7. **Mapping upload.** `POST <mappingEndpoint>/api/v1/rum/applications/{applicationId}/mappings?release=<release>`
    (path configurable with `uploadPath`), header `SigNoz-Api-Key: <Editor API key>`, `multipart/form-data`
    with `release`, `package_name`, `variant`, `version_code` and `map_id`, then the file part `file`
    (`filename="mapping.txt"`, `text/plain`). The server answers 201 with the mapping's `pg_map_id` as `debugId`;
    any 2xx is success.
+
+Mapping uploads still use the backend management API and its Editor key until the
+artifact-ingress migration (#234) is delivered. Configure the mappings plugin's
+`fusescope.endpoint` independently from `FuseScopeConfig.endpoint`; the former is the
+backend URL today, the latter is the collector URL. The sample exposes
+`-Pfusescope.sample.mappingEndpoint=<backend-url>` for that separation. A shared hostname
+only works if the proxy routes these paths to their respective services.
 
 ## Gateway contract
 
@@ -248,6 +261,10 @@ What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/f
 - The public key in the **`FuseScope-RUM-Key`** header.
 - No CORS or `Origin`: requests come from the app, not a browser.
 
+On server 0.159.0+, these routes are served by the collector over TLS. The backend
+has no RUM handlers on those paths (the UI catch-all may return HTML). Use a trusted certificate; private CAs must be
+trusted by the consuming app. Do not disable certificate or hostname verification.
+
 ## Compatibility
 
 | io.fuseone.fusescope:android | FuseScope server | OpenTelemetry Android | OpenTelemetry Java |
@@ -255,6 +272,10 @@ What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/f
 | 0.1.0-beta.1 | ≥ 0.155.0 | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 | 0.1.0-beta.2 | ≥ 0.156.0 (≥ 0.155.0 without per-build mappings) | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 | 0.1.0-beta.3 | ≥ 0.156.0 for existing signals; ≥ 0.159.0-beta.2 for native frames/grouping | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
+
+**Topology change:** server 0.159.0+ requires the new collector as RUM ingress
+(published collector 0.1.0 is the acceptance target). Older server minima above do not
+imply the ingest routes still exist on the backend in a newer release.
 
 The [Android 1.0 migration and compatibility guide](docs/android-1.0-migration.md)
 records the candidate toolchain, feature-specific backend requirements and aligned
@@ -356,5 +377,13 @@ requires the stored app start to appear with matching values/ratings in the sess
 Backend `0.159.0-beta.2` omits Android app starts from the timeline. The fix and real-sample acceptance
 are in [backend PR #313](https://github.com/fuseone-io/fusescope/pull/313), resolving
 [#312](https://github.com/fuseone-io/fusescope/issues/312) once merged and released. The existing beta.2
-acceptance remains reproducible without the strict flag. See the [1.0 audit](docs/android-1.0-audit.md)
+acceptance remains reproducible with `collector_ingress=false` and explicit beta.2 backend ref/image, without the strict flag. See the [1.0 audit](docs/android-1.0-audit.md)
 for the accepted baselines and remaining publication gates.
+
+
+Acceptance defaults now target backend 0.159.0 and collector 0.1.0. Collector mode
+records image identity and proves the backend paths no longer accept OTLP; SDK events go
+to the collector while API queries/R8 uploads go to the backend. The emulator verifies
+the fixture certificate (including its bridge-IP SAN) using a test CA embedded only
+for sample builds; source resources are restored afterward. This is sample/test setup,
+not a change to SDK trust defaults. Final collector acceptance is recorded in the audit.

@@ -6,6 +6,14 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def backend_route_removed(status, content_type, body):
+    # With the UI enabled, the backend's catch-all serves HTML even for unknown POSTs.
+    return status in (404, 405) or (
+        status == 200 and content_type.lower().startswith('text/html')
+        and body.lstrip().lower().startswith(('<!doctype html', '<html'))
+    )
+
+
 def emulator_endpoint(config):
     return config.get('ingestionEndpoint', config['endpoint']).replace('localhost', '10.0.2.2').replace('127.0.0.1', '10.0.2.2')
 

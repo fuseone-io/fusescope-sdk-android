@@ -34,6 +34,27 @@ pending backend minimum with the actual release containing #313 and record a fin
 1.0 acceptance run before closing #189. Do not infer that every server numerically
 newer than beta.2 contains #313.
 
+## Collector migration (backend 0.159.0+)
+
+The new Apache-2.0 `fusescope-collector` distribution (repo
+`fusescope-collector-server`) owns `/rum/v1/traces` and `/rum/v1/logs`. Point
+`FuseScopeConfig.endpoint` at its HTTPS ingestion URL; those backend routes are removed.
+The paths, public RUM key/header, protobuf/gzip payloads and Android package rules remain
+unchanged. Collector policy and setup reports travel over authenticated TLS OpAMP.
+A private CA needs explicit app trust; keep hostname/certificate verification enabled.
+
+API reads/Errors UI remain on the backend URL. The R8 mappings plugin still targets the
+backend management API with an Editor key while #234's artifact-ingress migration is
+pending; configure its endpoint separately. Do not send this Editor key to RUM ingest
+or assume artifacts-only upload exists merely because RUM moved. Once #234 lands,
+change the plugin upload endpoint/auth under its coordinated contract.
+
+The acceptance workflow defaults to collector mode and backend 0.159.0/collector 0.1.0,
+records the actual collector image identity, and refuses collector mode with legacy
+backend fixtures. The old beta.2 baseline requires explicit backend ref/image and
+`collector_ingress=false`. Strict app-start timeline still requires a source/release
+containing #313. Historical backend-gateway evidence does not establish collector acceptance.
+
 ## Migrating from beta.3
 
 1. When 1.0 is published, update SDK, optional Compose and optional mappings plugin

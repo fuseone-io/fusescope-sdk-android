@@ -14,6 +14,14 @@ class CollectorCompatibilityTest(unittest.TestCase):
         native_acceptance.build({'endpoint': 'http://127.0.0.1:8080', 'ingestionEndpoint': 'https://127.0.0.1:4319', 'applicationId': 'app', 'key': 'test'}, '0.1.0-beta.3')
         self.assertIn('-Pfusescope.sample.endpoint=https://10.0.2.2:4319', run.call_args.args[0])
 
+    def test_backend_spa_fallback_is_not_an_otlp_success(self):
+        from acceptance_transport import backend_route_removed
+        self.assertTrue(backend_route_removed(404, 'application/json', '{}'))
+        self.assertTrue(backend_route_removed(200, 'text/html; charset=utf-8', '<!doctype html><html></html>'))
+        self.assertFalse(backend_route_removed(200, 'application/json', '{}'))
+        self.assertFalse(backend_route_removed(200, 'application/x-protobuf', ''))
+        self.assertFalse(backend_route_removed(401, 'application/json', '{}'))
+
     def test_private_ca_is_scoped_to_build_and_restored_on_failure(self):
         from acceptance_transport import sample_tls
         with tempfile.TemporaryDirectory() as tmp:

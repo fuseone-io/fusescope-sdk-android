@@ -4,6 +4,10 @@ import json
 import os
 from pathlib import Path
 
+import docker
+import requests
+
+from acceptance_transport import backend_route_removed
 from fixtures.auth import USER_ADMIN_EMAIL, USER_ADMIN_PASSWORD
 from fixtures.rum import create_rum_application
 from fixtures.serviceaccount import create_service_account_with_key
@@ -26,17 +30,18 @@ def test_setup(signoz, create_user_admin, get_token, request):
     data["ingestionEndpoint"] = ingestion_endpoint
     if collector:
         data["caCertFile"] = collector.ca_cert_path
-        import docker  # available in the backend integration environment
         container = docker.from_env().containers.get(collector.self.id)
         image = container.image
         manifest = {"mode": "collector", "backendIngestRemoved": True, "collectorImageId": image.id,
                     "collectorRepoDigests": image.attrs.get("RepoDigests", []),
                     "collectorRevision": image.labels.get("org.opencontainers.image.revision"), "tls": "1.3"}
         # The backend must no longer offer a second, accidentally working ingest path.
-        import requests
+        manifest["backendRoutes"] = {}
         for signal in ("traces", "logs"):
             response = requests.post(endpoint + "/rum/v1/" + signal, json={}, timeout=10)
-            assert response.status_code == 404, (signal, response.status_code)
+            content_type = response.headers.get("Content-Type", "")
+            assert backend_route_removed(response.status_code, content_type, response.text), (signal, response.status_code, content_type)
+            manifest["backendRoutes"][signal] = {"status": response.status_code, "contentType": content_type}
         (output / "evidence" / "collector-transport.json").write_text(json.dumps(manifest, indent=2))
     scenarios = {}
     if os.environ.get("FULL_ACCEPTANCE") == "true":
