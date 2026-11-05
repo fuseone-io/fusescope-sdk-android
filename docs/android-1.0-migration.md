@@ -55,6 +55,16 @@ backend fixtures. The old beta.2 baseline requires explicit backend ref/image an
 `collector_ingress=false`. Strict app-start timeline still requires a source/release
 containing #313. Historical backend-gateway evidence does not establish collector acceptance.
 
+### Consent withdrawal correction
+
+Published beta.3 can intermittently close a TLS socket on main during withdrawal,
+throwing `NetworkOnMainThreadException` ([#336](https://github.com/fuseone-io/fusescope/issues/336)).
+The 1.0 source candidate moves exporter shutdown onto workers and preserves completion/
+failure results while leaving lifecycle cleanup unchanged. The source candidate passed
+five consent cycles and full real-collector/UI acceptance; the fix is not yet in a
+published SDK. Withdrawal/shutdown still flush pending data and should be invoked off
+main. Merely moving the caller off main did not avoid the upstream callback race.
+
 ### Older Android transport gate
 
 The library's minSdk remains 23. A direct connection to the collector's TLS-1.3-only

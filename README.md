@@ -254,6 +254,15 @@ backend URL today, the latter is the collector URL. The sample exposes
 `-Pfusescope.sample.mappingEndpoint=<backend-url>` for that separation. A shared hostname
 only works if the proxy routes these paths to their respective services.
 
+The published beta.3 has a confirmed intermittent consent-withdrawal crash with TLS
+collector connections ([#336](https://github.com/fuseone-io/fusescope/issues/336)).
+The correction in SDK PR #9 closes exporters on workers while preserving completion
+results; it has passed source-candidate acceptance, but is not yet published. Earlier
+backend-gateway beta acceptance does not establish compatibility for that TLS flow.
+Withdrawal/shutdown flush pending data, so invoke them off the main thread; the sample
+already does this. The fix is still required because upstream batch callbacks can
+otherwise close a TLS connection on main even when withdrawal started on a worker.
+
 ## Gateway contract
 
 - `POST <endpoint>/rum/v1/traces` and `POST <endpoint>/rum/v1/logs`, OTLP/HTTP **protobuf**
@@ -393,3 +402,17 @@ to the collector while API queries/R8 uploads go to the backend. The emulator ve
 the fixture certificate (including its bridge-IP SAN) using a test CA embedded only
 for sample builds; source resources are restored afterward. This is sample/test setup,
 not a change to SDK trust defaults. Final collector acceptance is recorded in the audit.
+
+
+To validate an unpublished SDK correction without a Maven release, explicitly set
+`source_sdk=true` and `sdk_version=1.0.0` in the acceptance workflow. It then verifies
+SDK/Compose project consumption, records `sdkOrigin=source` and the exact source SHA,
+and builds that candidate version locally. This is separate from Maven acceptance;
+default `source_sdk=false` still requires the published coordinates and rejects project
+substitution. `acceptance_scenarios=consent` is diagnostic-only; release-candidate
+coverage uses `all`. `consent_cycles=5` exercises repeated grant/withdraw/resume.
+
+[Collector acceptance 42086331484](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42086331484)
+passed all scenarios and four UI checks on API 35 with the corrected source candidate,
+collector 0.1.0 and backend source containing #313. See the audit for exact identities.
+Nothing was published by that run. API 23–28 transport remains a separate release gate.

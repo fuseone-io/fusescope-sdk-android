@@ -170,3 +170,60 @@ artifact records all four `1.0.0` coordinates and `releaseBuild=passed`; SDK/Com
 runtime and plugin build-environment reports confirm exact Maven resolution. The
 minified isolated consumer built successfully. Candidate checks are local-only; no
 Central release was dispatched.
+
+
+## New collector acceptance and TLS shutdown correction — 2026-11-05
+
+The new collector is the Apache-2.0 distribution `fusescope-collector`, repository
+`fusescope-collector-server`. Backend 0.159.0 removed RUM ingest. Acceptance now separates
+SDK ingest from backend management/API and the current R8 upload endpoint; the collector
+uses the fixture CA/hostname with TLS 1.3 and OpAMP policy. No trust verification is disabled.
+Artifact ingress migration #234 remains pending; no artifacts-only collector route is
+claimed available. Web/Android setup was corrected separately in backend PR #335 / #235.
+
+The historical Maven beta.3 collector runs passed native recovery, full usage (including
+app-start timeline/Java/ANR/R8) and zero sampling, but failed consent. Setup counters arrive
+asynchronously, so the negative oracle now also queries actual stored errors/sessions.
+The five-cycle diagnostic [42076820901](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42076820901)
+captured the crash: an already-completed batch future invoked exporter shutdown on main,
+OkHttp evicted a TLS connection, and Conscrypt's close/write threw
+`NetworkOnMainThreadException`. A generic worker-shutdown guard alone did not reproduce
+the callback race; direct span/log wrapper tests did.
+
+Regression-first [CI 42081297829](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42081297829)
+ran 59 tests with exactly the two new wrapper tests failing. The fix queues delegate
+shutdown on a worker, forwarding its success/failure, without changing Android lifecycle
+cleanup, API shape, protocol, sampling or consent defaults. Failure/exception propagation
+is also covered. Corrected runtime CI [42082062400](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42082062400)
+and source-consumer follow-up CI [42086337072](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42086337072)
+passed build/instrumented jobs, including the isolated aligned 1.0 local-Maven consumer.
+All 16 Python oracle tests passed. No runtime dependency or collector TLS downgrade was added.
+
+Full [collector acceptance 42086331484](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42086331484)
+passed native recovery, full usage, **five** grant/withdraw/resume cycles, zero sampling
+and **four** Errors/Sessions UI checks on API 35. Consent had exactly six expected manual
+errors, no ingestion before grant/no new errors after withdrawal, and resumed correctly.
+The full scenario retained session continuity, Activity/Fragment/Compose, sampled
+traceparent/request matching, privacy, Java/ANR retracing and app-start value/rating in
+the timeline. Native recovery retained session/release/time and durable-ack deduplication.
+
+Exact identities:
+
+- SDK origin: **source**, candidate version `1.0.0`, acceptance/runtime source
+  `b9c495f67c64f7b0b938f4a0ed9ef0a29d9d1b65`; shutdown fix commit `4399c2b`.
+- Backend source: `b7d55b948c0b3d4272f17455c2e227608820877d` (main plus #313), image ID
+  `sha256:8896f30e79ef8c96606b0110bfebc88b7a4e5663e1ffc4e74c9daf240266448d`.
+- Collector 0.1.0: `ghcr.io/fuseone-io/fusescope-collector@sha256:894e8718ceb8c6785997f49014fe8efea9c246122f175504ed980e51afcea028`,
+  revision `9549652a55f807cc6c88247b972757388d96b4cf`.
+- Artifact `native-release-acceptance`: `versions.txt`, `collector-transport.json`,
+  actual SDK/Compose dependency reports, scenario/session/app-start/native/Java/ANR JSON,
+  R8 map identity and four screenshots. Private fixture credentials/CA keys are excluded.
+
+This is **source-candidate acceptance, not publication or consumption of Maven 1.0**.
+The selected source mode verifies project consumption explicitly and defaults remain
+Maven-only. Complete #336's delivery with merge/release tracking; #189 remains open for
+merges, backend publication containing #313, actual aligned Maven 1.0 publication and
+acceptance of those published artifacts. Stock API 23–28 cannot directly negotiate the
+collector's TLS 1.3 listener; its provider/support decision and device tests remain open.
+The library minSdk remains 23. The already approved modern-path acceptance does not
+resolve or silently remove that older-device gate.
