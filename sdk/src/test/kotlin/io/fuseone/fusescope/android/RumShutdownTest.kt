@@ -22,6 +22,42 @@ import kotlin.concurrent.thread
 
 @RunWith(RobolectricTestRunner::class)
 class RumShutdownTest {
+    private fun assertWorkerShutdown(close: (() -> CompletableResultCode) -> CompletableResultCode) {
+        val closed = CountDownLatch(1)
+        val closedOnMain = AtomicBoolean(false)
+        assertTrue(Looper.myLooper() == Looper.getMainLooper())
+        val result = close {
+            closedOnMain.set(Looper.myLooper() == Looper.getMainLooper())
+            closed.countDown()
+            CompletableResultCode.ofSuccess()
+        }
+        assertTrue("the exporter must close", closed.await(5, TimeUnit.SECONDS))
+        assertTrue("shutdown completion must propagate", result.join(5, TimeUnit.SECONDS).isSuccess)
+        assertFalse("a completed batch callback can run on main and close a TLS socket", closedOnMain.get())
+    }
+
+    @Test
+    fun `a completed span batch cannot close TLS on main`() {
+        assertWorkerShutdown { shutdown ->
+            val delegate =
+                object : SpanExporter by InMemorySpanExporter.create() {
+                    override fun shutdown(): CompletableResultCode = shutdown()
+                }
+            RumSpanExporter(delegate, QueryPolicy.Allow(emptySet())).shutdown()
+        }
+    }
+
+    @Test
+    fun `a completed log batch cannot close TLS on main`() {
+        assertWorkerShutdown { shutdown ->
+            val delegate =
+                object : LogRecordExporter by InMemoryLogRecordExporter.create() {
+                    override fun shutdown(): CompletableResultCode = shutdown()
+                }
+            RumLogExporter(delegate, QueryPolicy.Allow(emptySet()), 1.0).shutdown()
+        }
+    }
+
     @Test
     fun `withdrawal closes network exporters off the main thread`() {
         val emitted = CountDownLatch(1)
