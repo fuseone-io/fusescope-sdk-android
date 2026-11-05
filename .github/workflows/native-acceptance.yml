@@ -17,6 +17,11 @@ on:
         type: boolean
         required: false
         default: false
+      acceptance_scenarios:
+        description: all for release evidence; consent for targeted failure diagnostics only
+        type: choice
+        options: [all, consent]
+        default: all
       collector_ingress:
         description: Use the new collector RUM ingress (requires backend 0.159.0+)
         type: boolean
@@ -51,6 +56,7 @@ jobs:
       BACKEND_IMAGE: ${{ inputs.backend_image }}
       COLLECTOR_INGRESS: ${{ inputs.collector_ingress }}
       COLLECTOR_VERSION: ${{ inputs.collector_version }}
+      ACCEPTANCE_SCENARIOS: ${{ inputs.acceptance_scenarios }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/checkout@v4
@@ -137,9 +143,10 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
           script: |
-            python scripts/native_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"
-            if [ "$FULL_ACCEPTANCE" = "true" ]; then if [ "$REQUIRE_APP_START_TIMELINE" = "true" ]; then python scripts/android_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION" --require-app-start-timeline; else python scripts/android_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"; fi; fi
+            if [ "$ACCEPTANCE_SCENARIOS" = "all" ]; then python scripts/native_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"; fi
+            if [ "$FULL_ACCEPTANCE" = "true" ]; then if [ "$REQUIRE_APP_START_TIMELINE" = "true" ]; then python scripts/android_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION" --scenarios "$ACCEPTANCE_SCENARIOS" --require-app-start-timeline; else python scripts/android_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION" --scenarios "$ACCEPTANCE_SCENARIOS"; fi; fi
       - name: Verify Errors UI
+        if: inputs.acceptance_scenarios == 'all'
         run: |
           cp "$NATIVE_ACCEPTANCE_DIR/.env.local" backend/tests/e2e/.env.local
           cp scripts/native_acceptance.spec.ts backend/tests/e2e/tests/rum/native-release.spec.ts
@@ -153,7 +160,7 @@ jobs:
         if: always()
         run: |
           mkdir -p "$NATIVE_ACCEPTANCE_DIR/evidence"
-          { echo "sdk_version=$SDK_VERSION"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; echo "backend_image=$BACKEND_IMAGE"; echo "require_app_start_timeline=$REQUIRE_APP_START_TIMELINE"; echo "collector_ingress=$COLLECTOR_INGRESS"; echo "collector_version=$COLLECTOR_VERSION"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
+          { echo "sdk_version=$SDK_VERSION"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; echo "backend_image=$BACKEND_IMAGE"; echo "require_app_start_timeline=$REQUIRE_APP_START_TIMELINE"; echo "collector_ingress=$COLLECTOR_INGRESS"; echo "collector_version=$COLLECTOR_VERSION"; echo "acceptance_scenarios=$ACCEPTANCE_SCENARIOS"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
       - name: Record source-built image identity
         if: always() && inputs.backend_image == 'source'
         run: docker image inspect signoz:integration --format 'backend_image_id={{.Id}}' >> "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"

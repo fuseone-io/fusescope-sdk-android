@@ -259,7 +259,7 @@ def verify_unsampled(config: dict, directory: pathlib.Path, calls: list) -> dict
     return {"sampleRate": 0, "noIngest": True, "noTraceparent": True, "unsampledDecisionPersisted": True}
 
 
-def verify(config: dict, directory: pathlib.Path, version: str, require_app_start: bool = False) -> None:
+def verify(config: dict, directory: pathlib.Path, version: str, require_app_start: bool = False, scenarios: str = "all") -> None:
     calls = []
 
     class API(BaseHTTPRequestHandler):
@@ -281,6 +281,8 @@ def verify(config: dict, directory: pathlib.Path, version: str, require_app_star
     failures = []
     try:
         for name, check in (("full", verify_full), ("consent", verify_consent), ("unsampled", verify_unsampled)):
+            if scenarios != "all" and name != scenarios:
+                continue
             print(f"Real-backend Android acceptance: {name}", flush=True)
             args = (config["scenarios"][name], directory, calls)
             try:
@@ -294,6 +296,10 @@ def verify(config: dict, directory: pathlib.Path, version: str, require_app_star
                     try:
                         data = get(config["scenarios"][name], route)
                         (directory / "evidence" / f"observed-{name}-{route}.json").write_text(json.dumps(data, indent=2))
+                        if route == "errors":
+                            for group in data.get("groups", [])[:10]:
+                                detail = get(config["scenarios"][name], "errors/" + group["fingerprint"], group["source"])
+                                (directory / "evidence" / f"observed-{name}-{group['source']}-detail.json").write_text(json.dumps(detail, indent=2))
                     except Exception:
                         pass
             output.write_text(json.dumps(evidence, indent=2))
@@ -309,12 +315,13 @@ def main() -> None:
     parser.add_argument("--config", type=pathlib.Path, required=True)
     parser.add_argument("--sdk-version", required=True)
     parser.add_argument("--require-app-start-timeline", action="store_true")
+    parser.add_argument("--scenarios", choices=["all", "consent"], default="all")
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
     if args.mode == "build":
         build(config, args.sdk_version, args.config.parent)
     else:
-        verify(config, args.config.parent, args.sdk_version, args.require_app_start_timeline)
+        verify(config, args.config.parent, args.sdk_version, args.require_app_start_timeline, args.scenarios)
 
 
 if __name__ == "__main__":
