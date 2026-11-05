@@ -91,7 +91,7 @@ jobs:
         run: |
           mkdir -p "$NATIVE_ACCEPTANCE_DIR/evidence"
           cp scripts/native_acceptance_setup.py backend/tests/integration/tests/rum/99_native_acceptance_setup.py
-          cp scripts/acceptance_transport.py backend/tests/integration/tests/rum/acceptance_transport.py
+          cp scripts/acceptance_transport.py backend/tests/fixtures/acceptance_transport.py
           python - <<'PYCONFIG'
           from pathlib import Path
           import os

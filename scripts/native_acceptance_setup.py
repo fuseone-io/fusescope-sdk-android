@@ -7,7 +7,7 @@ from pathlib import Path
 import docker
 import requests
 
-from acceptance_transport import backend_route_removed
+from fixtures.acceptance_transport import backend_route_removed
 from fixtures.auth import USER_ADMIN_EMAIL, USER_ADMIN_PASSWORD
 from fixtures.rum import create_rum_application
 from fixtures.serviceaccount import create_service_account_with_key
