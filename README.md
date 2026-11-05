@@ -256,6 +256,11 @@ What the SDK and FuseScope ≥ 0.155.0 agree on ([ADR 0003](https://github.com/f
 | 0.1.0-beta.2 | ≥ 0.156.0 (≥ 0.155.0 without per-build mappings) | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 | 0.1.0-beta.3 | ≥ 0.156.0 for existing signals; ≥ 0.159.0-beta.2 for native frames/grouping | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 
+The [Android 1.0 migration and compatibility guide](docs/android-1.0-migration.md)
+records the candidate toolchain, feature-specific backend requirements and aligned
+artifact verification. Version 1.0.0 is not published yet. App-start timeline support
+has passed source-build acceptance in backend PR #313; its backend release is pending.
+
 ## Contributing
 
 JDK 21 and the Android SDK (platform 37). Repository layout: `sdk/` (`io.fuseone.fusescope:android`), `compose/`
