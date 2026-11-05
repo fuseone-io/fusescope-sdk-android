@@ -7,6 +7,10 @@ on:
         description: Published Maven SDK version
         required: true
         default: 0.1.0-beta.3
+      source_sdk:
+        description: Validate an unpublished source candidate instead of consuming Maven (not release evidence)
+        type: boolean
+        default: false
       full_acceptance:
         description: Also validate Android 1.0 sessions, consent, sampling, Compose, Java/ANR/R8 and Errors UI
         type: boolean
@@ -56,6 +60,8 @@ jobs:
       NATIVE_SCREENSHOT: ${{ github.workspace }}/build/native-acceptance/evidence/errors-native.png
       FULL_ACCEPTANCE: ${{ inputs.full_acceptance }}
       SDK_VERSION: ${{ inputs.sdk_version }}
+      SDK_SOURCE: ${{ inputs.source_sdk }}
+      ORG_GRADLE_PROJECT_VERSION_NAME: ${{ inputs.sdk_version }}
       REQUIRE_APP_START_TIMELINE: ${{ inputs.require_app_start_timeline }}
       BACKEND_IMAGE: ${{ inputs.backend_image }}
       COLLECTOR_INGRESS: ${{ inputs.collector_ingress }}
@@ -165,7 +171,7 @@ jobs:
         if: always()
         run: |
           mkdir -p "$NATIVE_ACCEPTANCE_DIR/evidence"
-          { echo "sdk_version=$SDK_VERSION"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; echo "backend_image=$BACKEND_IMAGE"; echo "require_app_start_timeline=$REQUIRE_APP_START_TIMELINE"; echo "collector_ingress=$COLLECTOR_INGRESS"; echo "collector_version=$COLLECTOR_VERSION"; echo "acceptance_scenarios=$ACCEPTANCE_SCENARIOS"; echo "consent_cycles=$CONSENT_CYCLES"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
+          { echo "sdk_version=$SDK_VERSION"; echo "source_sdk=$SDK_SOURCE"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; echo "backend_image=$BACKEND_IMAGE"; echo "require_app_start_timeline=$REQUIRE_APP_START_TIMELINE"; echo "collector_ingress=$COLLECTOR_INGRESS"; echo "collector_version=$COLLECTOR_VERSION"; echo "acceptance_scenarios=$ACCEPTANCE_SCENARIOS"; echo "consent_cycles=$CONSENT_CYCLES"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
       - name: Record source-built image identity
         if: always() && inputs.backend_image == 'source'
         run: docker image inspect signoz:integration --format 'backend_image_id={{.Id}}' >> "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"

@@ -16,7 +16,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from acceptance_transport import emulator_endpoint, sample_tls
+from acceptance_transport import emulator_endpoint, sample_sdk_properties, sample_tls, verify_sdk_origin
 from native_acceptance import get
 from native_smoke import PACKAGE, adb, launch, wait_for
 
@@ -35,7 +35,7 @@ def _build(config: dict, version: str, directory: pathlib.Path) -> None:
         for name, scenario in config["scenarios"].items():
             endpoint = emulator_endpoint(scenario)
             properties = [
-                f"-Pfusescope.sample.sdkVersion={version}", f"-Pfusescope.sample.endpoint={endpoint}",
+                *sample_sdk_properties(version), f"-Pfusescope.sample.endpoint={endpoint}",
                 f"-Pfusescope.sample.mappingEndpoint={scenario['endpoint']}",
                 f"-Pfusescope.sample.applicationId={scenario['applicationId']}", f"-Pfusescope.sample.key={scenario['key']}",
                 f"-Pfusescope.sample.requireConsent={str(name == 'consent').lower()}",
@@ -52,9 +52,7 @@ def _build(config: dict, version: str, directory: pathlib.Path) -> None:
                 ["./gradlew", ":sample:dependencies", "--configuration", variant.lower() + "RuntimeClasspath", *properties],
                 text=True,
             )
-            assert f"io.fuseone.fusescope:android:{version}" in report
-            assert f"io.fuseone.fusescope:android-compose:{version}" in report
-            assert "project :sdk" not in report, "must consume published artifacts"
+            verify_sdk_origin(report, version, compose=True)
             apk = pathlib.Path(f"sample/build/outputs/apk/{variant.lower()}/sample-{variant.lower()}.apk")
             shutil.copyfile(apk, apks / f"{name}.apk")
             if name == "full":
@@ -64,7 +62,7 @@ def _build(config: dict, version: str, directory: pathlib.Path) -> None:
                 assert match, "actual R8 build must have its own map ID"
                 (directory / "evidence" / "r8-build.json").write_text(json.dumps({
                     "mapId": match[1], "sha256": hashlib.sha256(mapping.read_bytes()).hexdigest(),
-                    "sdkVersion": version, "consumer": "Maven Central SDK and Compose; source Gradle uploader",
+                    "sdkVersion": version, "consumer": "source SDK/Compose and Gradle uploader" if os.environ.get("SDK_SOURCE") == "true" else "Maven Central SDK and Compose; source Gradle uploader",
                 }, indent=2))
     finally:
         shutil.copyfile(apks / "native.apk", debug)
@@ -288,7 +286,7 @@ def verify(config: dict, directory: pathlib.Path, version: str, require_app_star
     server = ThreadingHTTPServer(("0.0.0.0", 4399), API)
     worker = threading.Thread(target=server.serve_forever, daemon=True)
     worker.start()
-    evidence = {"sdkVersion": version, "backend": os.environ.get("BACKEND_IMAGE", "see versions.txt"), "requiresAppStartTimeline": require_app_start, "scenarios": {}}
+    evidence = {"sdkOrigin": "source" if os.environ.get("SDK_SOURCE") == "true" else "Maven Central", "sdkVersion": version, "backend": os.environ.get("BACKEND_IMAGE", "see versions.txt"), "requiresAppStartTimeline": require_app_start, "scenarios": {}}
     output = directory / "evidence" / "android-acceptance.json"
     failures = []
     try:

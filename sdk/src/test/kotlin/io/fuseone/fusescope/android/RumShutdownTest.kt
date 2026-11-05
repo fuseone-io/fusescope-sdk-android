@@ -27,6 +27,7 @@ class RumShutdownTest {
         val emitted = CountDownLatch(1)
         val closed = CountDownLatch(2)
         val closedOnMain = AtomicBoolean(false)
+
         fun recordClose(): CompletableResultCode {
             if (Looper.myLooper() == Looper.getMainLooper()) closedOnMain.set(true)
             closed.countDown()
