@@ -26,11 +26,12 @@ class RumShutdownTest {
         val closed = CountDownLatch(1)
         val closedOnMain = AtomicBoolean(false)
         assertTrue(Looper.myLooper() == Looper.getMainLooper())
-        val result = close {
-            closedOnMain.set(Looper.myLooper() == Looper.getMainLooper())
-            closed.countDown()
-            CompletableResultCode.ofSuccess()
-        }
+        val result =
+            close {
+                closedOnMain.set(Looper.myLooper() == Looper.getMainLooper())
+                closed.countDown()
+                CompletableResultCode.ofSuccess()
+            }
         assertTrue("the exporter must close", closed.await(5, TimeUnit.SECONDS))
         assertTrue("shutdown completion must propagate", result.join(5, TimeUnit.SECONDS).isSuccess)
         assertFalse("a completed batch callback can run on main and close a TLS socket", closedOnMain.get())
