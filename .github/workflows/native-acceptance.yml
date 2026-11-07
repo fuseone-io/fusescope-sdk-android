@@ -3,6 +3,11 @@ name: native-acceptance
 on:
   workflow_dispatch:
     inputs:
+      android_api:
+        description: Device API (23/28 validate core Android; 35 additionally validates native recovery)
+        type: choice
+        options: ['23', '28', '35']
+        default: '35'
       sdk_version:
         description: Maven version, or candidate version when source_sdk is true
         required: true
@@ -38,7 +43,7 @@ on:
       collector_version:
         description: New collector image tag (image identity is recorded in evidence)
         required: true
-        default: 0.1.0
+        default: 0.3.1
       backend_ref:
         description: Backend release tag or full commit SHA
         required: true
@@ -58,6 +63,7 @@ jobs:
     env:
       NATIVE_ACCEPTANCE_DIR: ${{ github.workspace }}/build/native-acceptance
       NATIVE_SCREENSHOT: ${{ github.workspace }}/build/native-acceptance/evidence/errors-native.png
+      ANDROID_API: ${{ inputs.android_api || '35' }}
       FULL_ACCEPTANCE: ${{ inputs.full_acceptance }}
       SDK_VERSION: ${{ inputs.sdk_version }}
       SDK_SOURCE: ${{ inputs.source_sdk }}
@@ -96,7 +102,9 @@ jobs:
         working-directory: backend/tests
         run: uv sync --frozen
       - name: Validate acceptance options
-        run: test "$REQUIRE_APP_START_TIMELINE" != "true" || test "$FULL_ACCEPTANCE" = "true"
+        run: |
+          test "$REQUIRE_APP_START_TIMELINE" != "true" || test "$FULL_ACCEPTANCE" = "true"
+          test "$ANDROID_API" = "35" || { test "$FULL_ACCEPTANCE" = "true" && test "$COLLECTOR_INGRESS" = "true"; }
       - name: Verify published backend image matches source
         if: inputs.backend_image != 'source'
         run: |
@@ -127,7 +135,12 @@ jobs:
               marker = 'issue_server_certificate(tls, "localhost", "127.0.0.1")'
               assert marker in text
               # Emulator bridge IP must verify against the real fixture certificate.
-              collector.write_text(text.replace(marker, 'issue_server_certificate(tls, "localhost", "127.0.0.1", "10.0.2.2")'))
+              text = text.replace(marker, 'issue_server_certificate(tls, "localhost", "127.0.0.1", "10.0.2.2")')
+              if os.environ["ANDROID_API"] in ("23", "28"):
+                  rum_tls = '      min_version: "1.3"\n      cert_file: {dir}/rum-tls/tls.crt'
+                  assert text.count(rum_tls) == 1, "only the RUM listener may opt into TLS 1.2"
+                  text = text.replace(rum_tls, rum_tls.replace('"1.3"', '"1.2"'))
+              collector.write_text(text)
           p.write_text(source)
           PYCONFIG
           cd backend/tests
@@ -148,13 +161,15 @@ jobs:
       - name: Verify selected Android scenarios against real FuseScope
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: ${{ inputs.android_api || '35' }}
           target: default
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect
+          emulator-options: -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -writable-system
           script: |
-            if [ "$ACCEPTANCE_SCENARIOS" = "all" ]; then python scripts/native_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"; fi
+            python scripts/older_android.py trust --config "$NATIVE_ACCEPTANCE_DIR/private.json" --api "$ANDROID_API"
+            python scripts/older_android.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --api "$ANDROID_API"
+            if [ "$ACCEPTANCE_SCENARIOS" = "all" ] && [ "$ANDROID_API" = "35" ]; then python scripts/native_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION"; fi
             if [ "$FULL_ACCEPTANCE" = "true" ]; then if [ "$REQUIRE_APP_START_TIMELINE" = "true" ]; then python scripts/android_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION" --scenarios "$ACCEPTANCE_SCENARIOS" --require-app-start-timeline; else python scripts/android_acceptance.py verify --config "$NATIVE_ACCEPTANCE_DIR/private.json" --sdk-version "$SDK_VERSION" --scenarios "$ACCEPTANCE_SCENARIOS"; fi; fi
       - name: Verify Errors UI
         if: inputs.acceptance_scenarios == 'all'
@@ -165,13 +180,13 @@ jobs:
           cd backend/tests/e2e
           pnpm install --frozen-lockfile
           pnpm exec playwright install --with-deps chromium
-          pnpm exec playwright test tests/rum/native-release.spec.ts --project=chromium --no-deps --workers=1
+          if [ "$ANDROID_API" = "35" ]; then pnpm exec playwright test tests/rum/native-release.spec.ts --project=chromium --no-deps --workers=1; fi
           if [ "$FULL_ACCEPTANCE" = "true" ]; then pnpm exec playwright test tests/rum/android-release.spec.ts --project=chromium --no-deps --workers=1; fi
       - name: Record source versions
         if: always()
         run: |
           mkdir -p "$NATIVE_ACCEPTANCE_DIR/evidence"
-          { echo "sdk_version=$SDK_VERSION"; echo "source_sdk=$SDK_SOURCE"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; echo "backend_image=$BACKEND_IMAGE"; echo "require_app_start_timeline=$REQUIRE_APP_START_TIMELINE"; echo "collector_ingress=$COLLECTOR_INGRESS"; echo "collector_version=$COLLECTOR_VERSION"; echo "acceptance_scenarios=$ACCEPTANCE_SCENARIOS"; echo "consent_cycles=$CONSENT_CYCLES"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
+          { echo "android_api=$ANDROID_API"; echo "sdk_version=$SDK_VERSION"; echo "source_sdk=$SDK_SOURCE"; echo "acceptance_source=$(git rev-parse HEAD)"; echo "backend_source=$(git -C backend rev-parse HEAD)"; echo "backend_image=$BACKEND_IMAGE"; echo "require_app_start_timeline=$REQUIRE_APP_START_TIMELINE"; echo "collector_ingress=$COLLECTOR_INGRESS"; echo "collector_version=$COLLECTOR_VERSION"; echo "acceptance_scenarios=$ACCEPTANCE_SCENARIOS"; echo "consent_cycles=$CONSENT_CYCLES"; } > "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"
       - name: Record source-built image identity
         if: always() && inputs.backend_image == 'source'
         run: docker image inspect signoz:integration --format 'backend_image_id={{.Id}}' >> "$NATIVE_ACCEPTANCE_DIR/evidence/versions.txt"

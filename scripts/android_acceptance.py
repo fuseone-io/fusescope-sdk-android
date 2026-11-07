@@ -11,12 +11,13 @@ import shutil
 import subprocess
 import threading
 import time
+import traceback
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from acceptance_transport import emulator_endpoint, sample_sdk_properties, sample_tls, verify_sdk_origin
+from acceptance_transport import emulator_endpoint, sample_runtime_properties, sample_sdk_properties, sample_tls, verify_sdk_origin
 from native_acceptance import get
 from native_smoke import PACKAGE, adb, launch, wait_for
 
@@ -35,7 +36,7 @@ def _build(config: dict, version: str, directory: pathlib.Path) -> None:
         for name, scenario in config["scenarios"].items():
             endpoint = emulator_endpoint(scenario)
             properties = [
-                *sample_sdk_properties(version), f"-Pfusescope.sample.endpoint={endpoint}",
+                *sample_sdk_properties(version), *sample_runtime_properties(), f"-Pfusescope.sample.endpoint={endpoint}",
                 f"-Pfusescope.sample.mappingEndpoint={scenario['endpoint']}",
                 f"-Pfusescope.sample.applicationId={scenario['applicationId']}", f"-Pfusescope.sample.key={scenario['key']}",
                 f"-Pfusescope.sample.requireConsent={str(name == 'consent').lower()}",
@@ -147,6 +148,52 @@ def quiet(config: dict, expected_errors: int = 0, seconds: int = 30) -> None:
         time.sleep(2)
 
 
+def crash_dialog_button(xml):
+    for node in ET.fromstring(xml).iter("node"):
+        if node.get("package") != "android" or node.get("resource-id") != "android:id/button1":
+            continue
+        bounds = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.get("bounds", ""))
+        if bounds:
+            x1, y1, x2, y2 = map(int, bounds.groups())
+            return ((x1 + x2) // 2, (y1 + y2) // 2)
+    return None
+
+
+def acknowledge_crash_dialog(directory):
+    point = None
+    try:
+        adb("shell", "uiautomator", "dump", "/sdcard/fusescope-crash.xml", timeout=15)
+        xml = adb("shell", "cat", "/sdcard/fusescope-crash.xml", timeout=5)
+        (directory / "evidence" / "java-crash-dialog.xml").write_text(xml)
+        point = crash_dialog_button(xml)
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, ET.ParseError):
+        pass
+    if point:
+        x, y = point
+        adb("shell", "input", "tap", str(x), str(y))
+    else:
+        # Android 6 can hold UI automation while its crash dialog is open.
+        # The caller has already required the real backend crash; Enter is the
+        # normal user acknowledgement, and process termination is still checked.
+        time.sleep(2)
+        adb("shell", "input", "keyevent", "KEYCODE_ENTER")
+
+
+def sdk_report_ready(config, version):
+    status = get(config, "status")
+    sdk = status.get("sdk", {})
+    return status if sdk.get("name") == "io.fuseone.fusescope:android" and sdk.get("version") == version else None
+
+
+def app_process_id():
+    # Android 6 does not consistently ship pidof; ps is available on every tested API.
+    rows = [line.split() for line in adb("shell", "ps").splitlines() if line.strip()]
+    if not rows or "PID" not in rows[0]:
+        raise AssertionError("device ps output has no PID column")
+    pid_column = rows[0].index("PID")
+    return next((row[pid_column] for row in rows[1:] if row[-1] == PACKAGE), None)
+
+
 def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str, require_app_start: bool = False) -> dict:
     install(directory, "full")
     launch()
@@ -199,16 +246,27 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     assert anr["latestEvents"][0]["type"] == "ANR"
     assert anr["latestEvents"][0]["frames"]
     assert anr["latestEvents"][0]["symbolicated"] and anr["latestEvents"][0]["missingSourceMap"] is None
-    pid = adb("shell", f"pidof {PACKAGE} || true")
+    # Old Android can keep its system ANR dialog over the activity even after
+    # the app's main thread resumes. Start a fresh process before the Java crash;
+    # persisted session continuity is still required below.
+    adb("shell", "am", "force-stop", PACKAGE)
+    launch()
+    pid = app_process_id()
+    assert pid is not None, "sample was not running before the Java crash"
     launch("crash")
-    wait_for(lambda: adb("shell", f"pidof {PACKAGE} || true") != pid, "uncaught Java exception did not terminate the app")
     crashed = wait_for(lambda: error(config, "crash"), "uncaught Java crash did not reach FuseScope", 90)
+    if os.environ.get("ANDROID_API") == "23" and app_process_id() == pid:
+        # Marshmallow can hold the crashed process while the system's OK dialog
+        # awaits a user. The real backend crash above must exist before closing it.
+        acknowledge_crash_dialog(directory)
+    wait_for(lambda: app_process_id() != pid, "uncaught Java exception did not terminate the app")
     (directory / "evidence" / "java-crash.json").write_text(json.dumps(crashed, indent=2))
     event = crashed["latestEvents"][0]
     assert event["symbolicated"] and event["missingSourceMap"] is None
     assert any("Checkout.pay" in (frame.get("original") or {}).get("function", "") for frame in event["frames"])
     assert event["sessionId"] == session_id and event["release"] == first["release"]
-    assert get(config, "status")["sdk"]["version"] == version
+    report = wait_for(lambda: sdk_report_ready(config, version), "collector SDK identity report did not arrive", 120)
+    (directory / "evidence" / "sdk-status.json").write_text(json.dumps(report, indent=2))
     (directory / "evidence" / "java-crash.json").write_text(json.dumps(crashed, indent=2))
     (directory / "evidence" / "anr.json").write_text(json.dumps(anr, indent=2))
     (directory / "evidence" / "session.json").write_text(json.dumps(session, indent=2))
@@ -308,6 +366,7 @@ def verify(config: dict, directory: pathlib.Path, version: str, require_app_star
                 failures.append(name)
                 evidence["scenarios"][name] = {"passed": False, "error": str(failure)}
                 print(f"Failed: {name}: {failure}", flush=True)
+                print(traceback.format_exc(), flush=True)
                 for route in ("status", "sessions", "errors"):
                     try:
                         data = get(config["scenarios"][name], route)

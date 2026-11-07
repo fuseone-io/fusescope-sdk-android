@@ -15,6 +15,7 @@ import io.fuseone.fusescope.android.FuseScope
 import io.opentelemetry.android.instrumentation.annotations.RumScreenName
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import org.json.JSONObject
 import kotlin.concurrent.thread
 
 /**
@@ -30,6 +31,7 @@ class MainActivity : FragmentActivity() {
         val actions =
             linkedMapOf<String, () -> Unit>(
                 "request" to ::request,
+                "tls" to ::probeTls,
                 "error" to { FuseScope.addError(IllegalStateException("Checkout failed for https://shop.example/cart?token=secret")) },
                 "crash" to { Checkout().pay() },
                 "native" to { android.os.Process.sendSignal(android.os.Process.myPid(), android.system.OsConstants.SIGABRT) },
@@ -62,6 +64,7 @@ class MainActivity : FragmentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         intent.getStringExtra("action")?.let { actions[it]?.invoke() }
     }
 
@@ -70,6 +73,24 @@ class MainActivity : FragmentActivity() {
             runCatching {
                 http.newCall(Request.Builder().url(BuildConfig.API_URL + "?q=secret").build()).execute().close()
             }
+        }
+    }
+
+    private fun probeTls() {
+        val url = intent.getStringExtra("probeUrl") ?: (BuildConfig.FUSESCOPE_ENDPOINT.trimEnd('/') + "/rum/v1/traces")
+        thread {
+            val result = JSONObject()
+            try {
+                OkHttpClient().newCall(Request.Builder().url(url).build()).execute().use { response ->
+                    result.put("status", response.code)
+                    result.put("protocol", response.handshake?.tlsVersion?.javaName)
+                    result.put("cipher", response.handshake?.cipherSuite?.javaName)
+                }
+            } catch (failure: Exception) {
+                result.put("error", failure.javaClass.simpleName)
+                result.put("cause", failure.cause?.javaClass?.simpleName)
+            }
+            filesDir.resolve("tls-probe.json").writeText(result.toString())
         }
     }
 

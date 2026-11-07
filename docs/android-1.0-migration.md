@@ -10,12 +10,13 @@ prepare and verify the release candidate. They do not announce availability.
 |---|---|
 | Android SDK, Compose, mappings plugin and plugin marker | One aligned release version: `1.0.0` |
 | Build toolchain | JDK 21, Gradle wrapper 9.7.1, AGP 9.4.0, Kotlin 2.4.10, compile SDK 37 |
-| Runtime | SDK/Compose minSdk 23; sample minSdk 26; real acceptance on emulator API 35 |
+| Runtime | SDK/Compose minSdk 23; normal sample minSdk 26; candidate acceptance on AOSP APIs 23, 28 and 35 with test-host minSdk 23 |
 | OpenTelemetry | Android 1.7.0 (including its 1.7.0-alpha modules), Java 1.65.0, instrumentation 2.31.1 |
 | Compose | Sample BOM 2026.09.00; no promise of compatibility with other compiler/toolchain combinations |
 
-MinSdk is an API floor, not an acceptance matrix: API 23–34 and 36+ have not been
-validated by the recorded emulator run. Below API 26, configure core-library desugaring.
+MinSdk is an API floor, not an acceptance matrix: the recorded source-candidate runs cover
+AOSP API 23, 28 and 35. Other API/device/provider variants were not directly tested.
+Below API 26, configure core-library desugaring.
 Keep `android.useFullClasspathForDexingTransform=true` as in the repository properties.
 Native recovery requires API 30 for exit metadata and API 31 for available tombstone
 frames. ELF/DWARF symbolication remains separate work (#188/#191).
@@ -25,6 +26,7 @@ frames. ELF/DWARF symbolication remains separate work (#188/#191).
 | Existing Android sessions, views, errors and per-build mappings | Existing beta.3 contract: server 0.156.0+; see README for older beta constraints |
 | Native frames and grouping | Server 0.159.0-beta.2; accepted with published Maven beta.3 |
 | App-start storage | Accepted with published Maven beta.3 and server 0.159.0-beta.2 |
+| Android 1.0 setup support classification | Backend containing [PR #343](https://github.com/fuseone-io/fusescope/pull/343); stable 1.0.x range, **released minimum pending** |
 | App-start session timeline | Backend containing [PR #313](https://github.com/fuseone-io/fusescope/pull/313); accepted from source, **no released minimum version assigned yet** |
 
 The full [source-build acceptance](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/41763544558)
@@ -49,11 +51,37 @@ pending; configure its endpoint separately. Do not send this Editor key to RUM i
 or assume artifacts-only upload exists merely because RUM moved. Once #234 lands,
 change the plugin upload endpoint/auth under its coordinated contract.
 
-The acceptance workflow defaults to collector mode and backend 0.159.0/collector 0.1.0,
+The acceptance workflow defaults to collector mode and backend 0.159.0/collector 0.3.1,
 records the actual collector image identity, and refuses collector mode with legacy
 backend fixtures. The old beta.2 baseline requires explicit backend ref/image and
 `collector_ingress=false`. Strict app-start timeline still requires a source/release
 containing #313. Historical backend-gateway evidence does not establish collector acceptance.
+
+### Android 6+ transport validation
+
+Android 6+/API 23+ remains the support target. Collector 0.3.1 and chart 0.161.1
+provide an explicit RUM TLS 1.2 option with ECDHE AEAD suites; TLS 1.3 remains the
+default and all internal transports retain their policies. The public proxy must
+also accept TLS 1.2/1.3 on the RUM endpoint. Older devices need no Conscrypt SDK
+dependency. The existing CBC edge residual is tracked separately in #341.
+
+The acceptance workflow can select API 23, 28 or 35, recording actual device API,
+TLS protocol/cipher and certificate/hostname rejection. It reuses the existing
+sample with a test-only minSdk 23 override and core-library desugaring; the sample's
+normal minSdk stays 26 and the published SDK dependency graph is unchanged. API 23
+predates network-security-config, so only that disposable emulator receives the
+fixture CA in its system store. No certificate or hostname verification is disabled.
+Native recovery runs only on the modern API-35 control; older devices still exercise
+sessions/views/Compose, consent/sampling, propagation/privacy and Java/ANR/R8.
+
+Complete candidate runs passed on [API 23](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42398331995),
+[API 28](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42389543298)
+and [API 35](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42389541041).
+All used collector 0.3.1 pinned by its recorded digest, source backend #313 and SDK
+source candidate 1.0.0. API 23/28 negotiated TLS 1.2 ECDHE-RSA/AES-128-GCM; API 35
+negotiated TLS 1.3/AES-128-GCM. Each rejected wrong-host/untrusted certificates and
+passed all scenarios, five consent cycles and UI checks. Native recovery was exercised
+on API 35 only. Source-candidate success does not replace published-Maven acceptance.
 
 ### Consent withdrawal correction
 
@@ -134,7 +162,7 @@ Central availability and final real-backend 1.0 acceptance are separate release 
 
 ## Release completion
 
-Merge SDK PR #9 and backend PR #313; publish a backend containing the latter. Then
+Merge SDK PR #9 and backend PRs #313/#343; publish a backend containing both. Then
 record its exact version/source/digest, update this table and the public Android guide,
 publish aligned 1.0 artifacts with the existing manual release workflow, run the
 Central consumer verifier, and dispatch full strict acceptance against those published

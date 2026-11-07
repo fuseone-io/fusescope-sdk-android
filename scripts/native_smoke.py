@@ -16,8 +16,8 @@ PACKAGE = "io.fuseone.fusescope.sample"
 ACTIVITY = f"{PACKAGE}/.MainActivity"
 
 
-def adb(*args: str) -> str:
-    return subprocess.check_output(["adb", *args], text=True).strip()
+def adb(*args: str, timeout: int = 60) -> str:
+    return subprocess.check_output(["adb", *args], text=True, timeout=timeout).strip()
 
 
 def launch(action: str | None = None) -> None:

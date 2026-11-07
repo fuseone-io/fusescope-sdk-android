@@ -227,3 +227,47 @@ acceptance of those published artifacts. Stock API 23–28 cannot directly negot
 collector's TLS 1.3 listener; its provider/support decision and device tests remain open.
 The library minSdk remains 23. The already approved modern-path acceptance does not
 resolve or silently remove that older-device gate.
+
+
+## Android 6+ collector compatibility accepted — 2026-11-07
+
+The user retained API 23+ and chose TLS 1.2/1.3 at RUM ingress without adding Conscrypt.
+Collector 0.3.1 and chart 0.161.1 are published; TLS 1.3 remains their default, with an
+explicit RUM TLS 1.2 ECDHE-AEAD opt-in for direct old clients. Public TLS termination
+must also permit old clients; internal transports retain their policy. Edge residual
+CBC tracking belongs to #341 and was not changed by this SDK work.
+
+| AOSP API | Complete acceptance | Negotiated transport | Acceptance source |
+|---|---|---|---|
+| 23 | [42398331995](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42398331995) | TLS 1.2, ECDHE-RSA/AES-128-GCM | `a54bac14cd163a6f79e5a71b853db29c335f1b0a` |
+| 28 | [42389543298](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42389543298) | TLS 1.2, ECDHE-RSA/AES-128-GCM | `2cb7b0c4d22413aecb2d8e5ee951a32dc9b4bf0f` |
+| 35 | [42389541041](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42389541041) | TLS 1.3, AES-128-GCM | `2cb7b0c4d22413aecb2d8e5ee951a32dc9b4bf0f` |
+
+All three validate the unchanged source SDK candidate 1.0.0, full/consent/zero-sampling
+scenarios, five consent cycles, sessions/views/Compose, propagation/privacy, app-start
+timeline and Java/ANR/R8 plus Errors/Sessions UI. Wrong-host and untrusted certificates
+are refused. API 35 additionally repeats native recovery and durable acknowledgement.
+API 23's real Java crash is required in the backend before acknowledging Android's
+system crash dialog; process termination and the original session/release remain checked.
+
+Collector image digest: `sha256:3856f022c2ac27369c3bb1224b8945940bd7d6f6a30fce0f59734584cfc4374b`,
+revision `51a5ef114d96953531c7a76737a3d367ce2a9014`. Backend source is
+`b7d55b948c0b3d4272f17455c2e227608820877d` (#313); each run records its source-built
+image ID. Sanitized artifacts contain TLS attempts, dependency reports, version manifests,
+R8 map identity, stored sessions/errors/app-start and UI screenshots; private fixture
+credentials/CA keys are excluded.
+
+The host uses the existing sample with test-only minSdk 23 and core-library desugaring.
+API 23 predates network-security-config: only its disposable emulator receives the fixture
+CA in the system trust store, followed by a full reboot. No SDK trust/provider override is
+introduced. ADB commands are bounded, and only pre-TLS connection startup errors may retry;
+certificate/hostname/protocol checks stay strict. Earlier incomplete runs revealed test
+readiness, async-report and system-dialog assumptions; only the complete runs above count
+as acceptance. The final probe-file read deadline is a harness-only follow-up, covered
+by its local regression and CI; it changes no SDK runtime code or positive acceptance criteria.
+
+Backend #342 / [PR #343](https://github.com/fuseone-io/fusescope/pull/343) separately fixes
+1.0.0 being labelled outdated by the prior exclusive supported-range bound. Publish a
+backend containing #313/#343, record its real minimum, then publish and consume all four
+aligned 1.0 Maven coordinates and repeat published-version acceptance. This evidence
+completes the source-candidate older-device gate, not E's merge/publication gates.

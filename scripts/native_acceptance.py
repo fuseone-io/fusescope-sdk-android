@@ -10,7 +10,7 @@ import urllib.parse
 import urllib.request
 from datetime import datetime
 
-from acceptance_transport import emulator_endpoint, sample_sdk_properties, sample_tls, verify_sdk_origin
+from acceptance_transport import emulator_endpoint, sample_runtime_properties, sample_sdk_properties, sample_tls, verify_sdk_origin
 from native_smoke import PACKAGE, adb, launch, wait_for, wait_native_ack
 
 
@@ -44,7 +44,7 @@ def build(config: dict, version: str) -> None:
 
 def _build(config: dict, version: str) -> None:
     endpoint = emulator_endpoint(config)
-    properties = [*sample_sdk_properties(version), f"-Pfusescope.sample.endpoint={endpoint}", f"-Pfusescope.sample.applicationId={config['applicationId']}", f"-Pfusescope.sample.key={config['key']}"]
+    properties = [*sample_sdk_properties(version), *sample_runtime_properties(), f"-Pfusescope.sample.endpoint={endpoint}", f"-Pfusescope.sample.applicationId={config['applicationId']}", f"-Pfusescope.sample.key={config['key']}"]
     subprocess.run(["./gradlew", ":sample:assembleDebug", *properties], check=True)
     report = subprocess.check_output(["./gradlew", ":sample:dependencies", "--configuration", "debugRuntimeClasspath", *properties], text=True)
     if directory := os.environ.get("NATIVE_ACCEPTANCE_DIR"):

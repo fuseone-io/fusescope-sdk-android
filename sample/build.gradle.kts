@@ -15,7 +15,7 @@ android {
 
     defaultConfig {
         applicationId = "io.fuseone.fusescope.sample"
-        minSdk = 26
+        minSdk = setting("minSdk", "26").toInt()
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
@@ -43,6 +43,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
@@ -66,6 +67,7 @@ fusescope {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     val publishedSdk = providers.gradleProperty("fusescope.sample.sdkVersion").orNull
     if (publishedSdk == null) {
         implementation(project(":sdk"))

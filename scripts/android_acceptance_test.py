@@ -3,10 +3,37 @@
 import unittest
 from unittest.mock import patch
 
-from android_acceptance import error, quiet, sampled_traceparent, session_ready, timeline_events
+from android_acceptance import crash_dialog_button, app_process_id, sdk_report_ready, error, quiet, sampled_traceparent, session_ready, timeline_events
 
 
 class AcceptanceOracleTest(unittest.TestCase):
+    def test_only_the_android_system_crash_button_is_acknowledged(self):
+        xml = '<hierarchy><node package="io.fuseone.fusescope.sample" resource-id="android:id/button1" bounds="[0,0][20,20]"/><node package="android" resource-id="android:id/button1" bounds="[100,200][300,400]"/></hierarchy>'
+        self.assertEqual((200, 300), crash_dialog_button(xml))
+        self.assertIsNone(crash_dialog_button('<hierarchy><node package="app" text="OK" bounds="[0,0][20,20]"/></hierarchy>'))
+
+    @patch("android_acceptance.get")
+    def test_sdk_identity_waits_for_the_collector_report(self, get):
+        get.side_effect = [
+            {"sdk": {"name": "", "version": ""}},
+            {"sdk": {"name": "io.fuseone.fusescope:android", "version": "0.1.0-beta.3"}},
+            {"sdk": {"name": "io.fuseone.fusescope:android", "version": "1.0.0"}},
+        ]
+        self.assertIsNone(sdk_report_ready({}, "1.0.0"))
+        self.assertIsNone(sdk_report_ready({}, "1.0.0"))
+        self.assertEqual("1.0.0", sdk_report_ready({}, "1.0.0")["sdk"]["version"])
+
+    @patch("android_acceptance.adb")
+    def test_process_detection_works_with_marshmallow_and_modern_ps(self, adb):
+        for output in (
+            "USER PID PPID VSIZE RSS WCHAN PC NAME\nu0_a66 123 1 1024 512 fffff 0000 io.fuseone.fusescope.sample",
+            "USER PID PPID VSZ RSS WCHAN ADDR S NAME\nu0_a66 456 1 1024 512 0 0 S io.fuseone.fusescope.sample",
+        ):
+            adb.return_value = output
+            self.assertIn(app_process_id(), ('123', '456'))
+        adb.return_value = "USER PID PPID NAME\nu0_a66 123 1 other.application"
+        self.assertIsNone(app_process_id())
+
     def test_sampling_bit_is_independent_of_random_trace_id_flag(self):
         prefix = "00-" + "a" * 32 + "-" + "b" * 16 + "-"
         for flags in ("01", "03"):
