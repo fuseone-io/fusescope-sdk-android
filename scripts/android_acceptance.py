@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import threading
 import time
+import traceback
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -147,6 +148,12 @@ def quiet(config: dict, expected_errors: int = 0, seconds: int = 30) -> None:
         time.sleep(2)
 
 
+def sdk_report_ready(config, version):
+    status = get(config, "status")
+    sdk = status.get("sdk", {})
+    return status if sdk.get("name") == "io.fuseone.fusescope:android" and sdk.get("version") == version else None
+
+
 def app_process_id():
     # Android 6 does not consistently ship pidof; ps is available on every tested API.
     rows = [line.split() for line in adb("shell", "ps").splitlines() if line.strip()]
@@ -208,6 +215,11 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     assert anr["latestEvents"][0]["type"] == "ANR"
     assert anr["latestEvents"][0]["frames"]
     assert anr["latestEvents"][0]["symbolicated"] and anr["latestEvents"][0]["missingSourceMap"] is None
+    # Old Android can keep its system ANR dialog over the activity even after
+    # the app's main thread resumes. Start a fresh process before the Java crash;
+    # persisted session continuity is still required below.
+    adb("shell", "am", "force-stop", PACKAGE)
+    launch()
     pid = app_process_id()
     assert pid is not None, "sample was not running before the Java crash"
     launch("crash")
@@ -218,7 +230,8 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     assert event["symbolicated"] and event["missingSourceMap"] is None
     assert any("Checkout.pay" in (frame.get("original") or {}).get("function", "") for frame in event["frames"])
     assert event["sessionId"] == session_id and event["release"] == first["release"]
-    assert get(config, "status")["sdk"]["version"] == version
+    report = wait_for(lambda: sdk_report_ready(config, version), "collector SDK identity report did not arrive", 120)
+    (directory / "evidence" / "sdk-status.json").write_text(json.dumps(report, indent=2))
     (directory / "evidence" / "java-crash.json").write_text(json.dumps(crashed, indent=2))
     (directory / "evidence" / "anr.json").write_text(json.dumps(anr, indent=2))
     (directory / "evidence" / "session.json").write_text(json.dumps(session, indent=2))
@@ -318,6 +331,7 @@ def verify(config: dict, directory: pathlib.Path, version: str, require_app_star
                 failures.append(name)
                 evidence["scenarios"][name] = {"passed": False, "error": str(failure)}
                 print(f"Failed: {name}: {failure}", flush=True)
+                print(traceback.format_exc(), flush=True)
                 for route in ("status", "sessions", "errors"):
                     try:
                         data = get(config["scenarios"][name], route)

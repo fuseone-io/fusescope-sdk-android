@@ -3,10 +3,21 @@
 import unittest
 from unittest.mock import patch
 
-from android_acceptance import app_process_id, error, quiet, sampled_traceparent, session_ready, timeline_events
+from android_acceptance import app_process_id, sdk_report_ready, error, quiet, sampled_traceparent, session_ready, timeline_events
 
 
 class AcceptanceOracleTest(unittest.TestCase):
+    @patch("android_acceptance.get")
+    def test_sdk_identity_waits_for_the_collector_report(self, get):
+        get.side_effect = [
+            {"sdk": {"name": "", "version": ""}},
+            {"sdk": {"name": "io.fuseone.fusescope:android", "version": "0.1.0-beta.3"}},
+            {"sdk": {"name": "io.fuseone.fusescope:android", "version": "1.0.0"}},
+        ]
+        self.assertIsNone(sdk_report_ready({}, "1.0.0"))
+        self.assertIsNone(sdk_report_ready({}, "1.0.0"))
+        self.assertEqual("1.0.0", sdk_report_ready({}, "1.0.0")["sdk"]["version"])
+
     @patch("android_acceptance.adb")
     def test_process_detection_works_with_marshmallow_and_modern_ps(self, adb):
         for output in (
