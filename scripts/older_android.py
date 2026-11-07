@@ -21,7 +21,8 @@ def validate_probe(probe, api):
 
 def probe(url):
     adb('shell', 'run-as', PACKAGE, 'rm', '-f', 'files/tls-probe.json')
-    adb('shell', 'am', 'start', '-W', '--activity-single-top', '-n', ACTIVITY, '--es', 'action', 'tls', '--es', 'probeUrl', url)
+    started = adb('shell', 'am', 'start', '-W', '--activity-single-top', '-n', ACTIVITY, '--es', 'action', 'tls', '--es', 'probeUrl', url)
+    print(started, flush=True)
 
     def result():
         proc = subprocess.run(['adb', 'shell', 'run-as', PACKAGE, 'cat', 'files/tls-probe.json'], capture_output=True, text=True)
@@ -91,7 +92,13 @@ def verify(config, directory, api):
     assert actual == api, f'wrong emulator: {actual}, expected {api}'
     adb('install', '-r', 'sample/build/outputs/apk/debug/sample-debug.apk')
     adb('shell', 'pm', 'clear', PACKAGE)
-    result = {'api': actual, 'collector': probe(emulator_endpoint(config).rstrip('/') + '/rum/v1/traces')}
+    try:
+        result = {'api': actual, 'collector': probe(emulator_endpoint(config).rstrip('/') + '/rum/v1/traces')}
+    except Exception:
+        crash = adb('logcat', '-d', '-s', 'AndroidRuntime:E')
+        (directory / 'evidence' / 'device-crash.txt').write_text(crash)
+        print(crash, flush=True)
+        raise
     validate_probe(result['collector'], api)
     for name, trusted in [('wrongHostname', True), ('untrustedCertificate', False)]:
         with invalid_server(config, directory, trusted) as url:
