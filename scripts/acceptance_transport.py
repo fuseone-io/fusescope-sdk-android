@@ -68,3 +68,10 @@ def verify_sdk_origin(report, version, compose=False):
         for artifact in artifacts:
             assert f'io.fuseone.fusescope:{artifact}:{version}' in report
         assert not projects, 'release acceptance must consume published artifacts'
+
+
+def sample_runtime_properties():
+    api = int(os.environ.get('ANDROID_API', '35'))
+    if api not in (23, 28, 35):
+        raise ValueError('acceptance supports API 23, 28 or 35')
+    return ['-Pfusescope.sample.minSdk=23'] if 'ANDROID_API' in os.environ else []

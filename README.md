@@ -282,14 +282,16 @@ trusted by the consuming app. Do not disable certificate or hostname verificatio
 | 0.1.0-beta.2 | ≥ 0.156.0 (≥ 0.155.0 without per-build mappings) | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 | 0.1.0-beta.3 | ≥ 0.156.0 for existing signals; ≥ 0.159.0-beta.2 for native frames/grouping | 1.7.0 | 1.65.0, instrumentation 2.31.1 |
 
-**Transport requirement:** the collector listener requires TLS 1.3. Android's stock
-TLS provider supports it from API 29; library minSdk 23 does not by itself guarantee
-direct collector connectivity on API 23–28. The older-device strategy and acceptance
-remain a 1.0 release gate; see the migration guide. No SDK dependency or minimum API
-level is changed here.
+**Transport requirement:** collector 0.3.1 can opt into TLS 1.2 with ECDHE AEAD
+suites (`tls.min_version: "1.2"`) for stock Android API 23–28. TLS 1.3 remains the
+collector/chart default and is negotiated by capable modern clients. The public
+proxy must also accept TLS 1.2 for old clients; a proxy-to-collector hop can remain
+TLS 1.3. No additional SDK TLS provider is required. Real API 23/28 candidate
+acceptance is being validated under [#337](https://github.com/fuseone-io/fusescope/issues/337);
+minSdk 23 alone is not evidence of device compatibility.
 
 **Topology change:** server 0.159.0+ requires the new collector as RUM ingress
-(published collector 0.1.0 is the acceptance target). Older server minima above do not
+(collector 0.3.1 is the current device-acceptance target). Older server minima above do not
 imply the ingest routes still exist on the backend in a newer release.
 
 The [Android 1.0 migration and compatibility guide](docs/android-1.0-migration.md)
