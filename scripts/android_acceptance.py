@@ -16,7 +16,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from acceptance_transport import emulator_endpoint, sample_sdk_properties, sample_tls, verify_sdk_origin
+from acceptance_transport import emulator_endpoint, sample_runtime_properties, sample_sdk_properties, sample_tls, verify_sdk_origin
 from native_acceptance import get
 from native_smoke import PACKAGE, adb, launch, wait_for
 
@@ -35,7 +35,7 @@ def _build(config: dict, version: str, directory: pathlib.Path) -> None:
         for name, scenario in config["scenarios"].items():
             endpoint = emulator_endpoint(scenario)
             properties = [
-                *sample_sdk_properties(version), f"-Pfusescope.sample.endpoint={endpoint}",
+                *sample_sdk_properties(version), *sample_runtime_properties(), f"-Pfusescope.sample.endpoint={endpoint}",
                 f"-Pfusescope.sample.mappingEndpoint={scenario['endpoint']}",
                 f"-Pfusescope.sample.applicationId={scenario['applicationId']}", f"-Pfusescope.sample.key={scenario['key']}",
                 f"-Pfusescope.sample.requireConsent={str(name == 'consent').lower()}",

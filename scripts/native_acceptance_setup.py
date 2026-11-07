@@ -34,7 +34,7 @@ def test_setup(signoz, create_user_admin, get_token, request):
         image = container.image
         manifest = {"mode": "collector", "backendIngestRemoved": True, "collectorImageId": image.id,
                     "collectorRepoDigests": image.attrs.get("RepoDigests", []),
-                    "collectorRevision": image.labels.get("org.opencontainers.image.revision"), "tls": "1.3"}
+                    "collectorRevision": image.labels.get("org.opencontainers.image.revision"), "tlsMinimum": "1.2" if os.environ.get("ANDROID_API") in ("23", "28") else "1.3"}
         # The backend must no longer offer a second, accidentally working ingest path.
         manifest["backendRoutes"] = {}
         for signal in ("traces", "logs"):
