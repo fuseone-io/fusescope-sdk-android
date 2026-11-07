@@ -160,16 +160,23 @@ def crash_dialog_button(xml):
 
 
 def acknowledge_crash_dialog(directory):
-    def button():
-        adb("shell", "uiautomator", "dump", "/sdcard/fusescope-crash.xml")
-        xml = adb("shell", "cat", "/sdcard/fusescope-crash.xml")
+    point = None
+    try:
+        adb("shell", "uiautomator", "dump", "/sdcard/fusescope-crash.xml", timeout=15)
+        xml = adb("shell", "cat", "/sdcard/fusescope-crash.xml", timeout=5)
+        (directory / "evidence" / "java-crash-dialog.xml").write_text(xml)
         point = crash_dialog_button(xml)
-        if point:
-            (directory / "evidence" / "java-crash-dialog.xml").write_text(xml)
-        return point
-
-    x, y = wait_for(button, "Android crash dialog was not available for acknowledgement", 30)
-    adb("shell", "input", "tap", str(x), str(y))
+    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, ET.ParseError):
+        pass
+    if point:
+        x, y = point
+        adb("shell", "input", "tap", str(x), str(y))
+    else:
+        # Android 6 can hold UI automation while its crash dialog is open.
+        # The caller has already required the real backend crash; Enter is the
+        # normal user acknowledgement, and process termination is still checked.
+        time.sleep(2)
+        adb("shell", "input", "keyevent", "KEYCODE_ENTER")
 
 
 def sdk_report_ready(config, version):

@@ -84,9 +84,12 @@ def install_ca(config):
     adb('remount')
     adb('push', str(cert), '/system/etc/security/cacerts/' + name)
     adb('shell', 'chmod', '644', '/system/etc/security/cacerts/' + name)
-    adb('shell', 'stop')
-    adb('shell', 'start')
-    wait_for(framework_ready, 'emulator package manager did not restart', 180)
+    # A full reboot avoids PackageInstaller deadlocks after restarting only
+    # the framework on Marshmallow. No application has been installed yet.
+    adb('reboot')
+    time.sleep(3)
+    adb('wait-for-device', timeout=120)
+    wait_for(lambda: adb('shell', 'getprop', 'sys.boot_completed') == '1' and framework_ready(), 'emulator did not finish rebooting', 180)
 
 
 @contextmanager
