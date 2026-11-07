@@ -43,6 +43,7 @@ def install_ca(config):
     adb('remount')
     adb('push', str(cert), '/system/etc/security/cacerts/' + name)
     adb('shell', 'chmod', '644', '/system/etc/security/cacerts/' + name)
+    adb('shell', 'setprop', 'sys.boot_completed', '0')
     adb('shell', 'stop')
     adb('shell', 'start')
     wait_for(lambda: adb('shell', 'getprop', 'sys.boot_completed') == '1', 'emulator did not restart', 120)

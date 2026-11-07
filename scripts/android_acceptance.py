@@ -147,6 +147,15 @@ def quiet(config: dict, expected_errors: int = 0, seconds: int = 30) -> None:
         time.sleep(2)
 
 
+def app_process_id():
+    # Android 6 does not consistently ship pidof; ps is available on every tested API.
+    rows = [line.split() for line in adb("shell", "ps").splitlines() if line.strip()]
+    if not rows or "PID" not in rows[0]:
+        raise AssertionError("device ps output has no PID column")
+    pid_column = rows[0].index("PID")
+    return next((row[pid_column] for row in rows[1:] if row[-1] == PACKAGE), None)
+
+
 def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str, require_app_start: bool = False) -> dict:
     install(directory, "full")
     launch()
@@ -199,9 +208,10 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     assert anr["latestEvents"][0]["type"] == "ANR"
     assert anr["latestEvents"][0]["frames"]
     assert anr["latestEvents"][0]["symbolicated"] and anr["latestEvents"][0]["missingSourceMap"] is None
-    pid = adb("shell", f"pidof {PACKAGE} || true")
+    pid = app_process_id()
+    assert pid is not None, "sample was not running before the Java crash"
     launch("crash")
-    wait_for(lambda: adb("shell", f"pidof {PACKAGE} || true") != pid, "uncaught Java exception did not terminate the app")
+    wait_for(lambda: app_process_id() != pid, "uncaught Java exception did not terminate the app")
     crashed = wait_for(lambda: error(config, "crash"), "uncaught Java crash did not reach FuseScope", 90)
     (directory / "evidence" / "java-crash.json").write_text(json.dumps(crashed, indent=2))
     event = crashed["latestEvents"][0]

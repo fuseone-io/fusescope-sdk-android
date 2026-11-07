@@ -3,10 +3,21 @@
 import unittest
 from unittest.mock import patch
 
-from android_acceptance import error, quiet, sampled_traceparent, session_ready, timeline_events
+from android_acceptance import app_process_id, error, quiet, sampled_traceparent, session_ready, timeline_events
 
 
 class AcceptanceOracleTest(unittest.TestCase):
+    @patch("android_acceptance.adb")
+    def test_process_detection_works_with_marshmallow_and_modern_ps(self, adb):
+        for output in (
+            "USER PID PPID VSIZE RSS WCHAN PC NAME\nu0_a66 123 1 1024 512 fffff 0000 io.fuseone.fusescope.sample",
+            "USER PID PPID VSZ RSS WCHAN ADDR S NAME\nu0_a66 456 1 1024 512 0 0 S io.fuseone.fusescope.sample",
+        ):
+            adb.return_value = output
+            self.assertIn(app_process_id(), ('123', '456'))
+        adb.return_value = "USER PID PPID NAME\nu0_a66 123 1 other.application"
+        self.assertIsNone(app_process_id())
+
     def test_sampling_bit_is_independent_of_random_trace_id_flag(self):
         prefix = "00-" + "a" * 32 + "-" + "b" * 16 + "-"
         for flags in ("01", "03"):

@@ -49,11 +49,31 @@ pending; configure its endpoint separately. Do not send this Editor key to RUM i
 or assume artifacts-only upload exists merely because RUM moved. Once #234 lands,
 change the plugin upload endpoint/auth under its coordinated contract.
 
-The acceptance workflow defaults to collector mode and backend 0.159.0/collector 0.1.0,
+The acceptance workflow defaults to collector mode and backend 0.159.0/collector 0.3.1,
 records the actual collector image identity, and refuses collector mode with legacy
 backend fixtures. The old beta.2 baseline requires explicit backend ref/image and
 `collector_ingress=false`. Strict app-start timeline still requires a source/release
 containing #313. Historical backend-gateway evidence does not establish collector acceptance.
+
+### Android 6+ transport validation
+
+Android 6+/API 23+ remains the support target. Collector 0.3.1 and chart 0.161.1
+provide an explicit RUM TLS 1.2 option with ECDHE AEAD suites; TLS 1.3 remains the
+default and all internal transports retain their policies. The public proxy must
+also accept TLS 1.2/1.3 on the RUM endpoint. Older devices need no Conscrypt SDK
+dependency. The existing CBC edge residual is tracked separately in #341.
+
+The acceptance workflow can select API 23, 28 or 35, recording actual device API,
+TLS protocol/cipher and certificate/hostname rejection. It reuses the existing
+sample with a test-only minSdk 23 override and core-library desugaring; the sample's
+normal minSdk stays 26 and the published SDK dependency graph is unchanged. API 23
+predates network-security-config, so only that disposable emulator receives the
+fixture CA in its system store. No certificate or hostname verification is disabled.
+Native recovery runs only on the modern API-35 control; older devices still exercise
+sessions/views/Compose, consent/sampling, propagation/privacy and Java/ANR/R8.
+
+These are prepared checks, not device acceptance evidence yet; results are tracked
+in #337. Source-candidate success does not replace final published-Maven acceptance.
 
 ### Consent withdrawal correction
 
