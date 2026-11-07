@@ -88,6 +88,7 @@ class MainActivity : FragmentActivity() {
                 }
             } catch (failure: Exception) {
                 result.put("error", failure.javaClass.simpleName)
+                result.put("cause", failure.cause?.javaClass?.simpleName)
             }
             filesDir.resolve("tls-probe.json").writeText(result.toString())
         }

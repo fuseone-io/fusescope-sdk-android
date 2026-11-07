@@ -13,7 +13,7 @@ from native_smoke import ACTIVITY, PACKAGE, adb, wait_for
 
 
 def validate_probe(probe, api):
-    assert 'error' not in probe, 'trusted collector TLS handshake failed'
+    assert 'error' not in probe, f'trusted collector TLS handshake failed: {probe}'
     assert probe['status'] == 405, 'probe must reach the RUM route'
     assert probe['protocol'] == ('TLSv1.2' if api < 29 else 'TLSv1.3'), probe
     assert any(name in probe['cipher'] for name in ('GCM', 'CHACHA20_POLY1305')), probe
@@ -34,6 +34,14 @@ def probe(url):
     return wait_for(result, 'device TLS probe did not complete', 60)
 
 
+def framework_ready():
+    try:
+        process = subprocess.run(['adb', 'shell', 'pm', 'path', 'android'], capture_output=True, text=True, timeout=10)
+        return process.returncode == 0 and 'package:' in process.stdout
+    except subprocess.TimeoutExpired:
+        return False
+
+
 def install_ca(config):
     # API 23 predates network-security-config. Trust this fixture CA in the
     # disposable emulator; production trust and hostname verification stay on.
@@ -44,10 +52,9 @@ def install_ca(config):
     adb('remount')
     adb('push', str(cert), '/system/etc/security/cacerts/' + name)
     adb('shell', 'chmod', '644', '/system/etc/security/cacerts/' + name)
-    adb('shell', 'setprop', 'sys.boot_completed', '0')
     adb('shell', 'stop')
     adb('shell', 'start')
-    wait_for(lambda: adb('shell', 'getprop', 'sys.boot_completed') == '1', 'emulator did not restart', 120)
+    wait_for(framework_ready, 'emulator package manager did not restart', 180)
 
 
 @contextmanager
@@ -99,6 +106,8 @@ def verify(config, directory, api):
         (directory / 'evidence' / 'device-crash.txt').write_text(crash)
         print(crash, flush=True)
         raise
+    (directory / 'evidence' / 'device-tls.json').write_text(json.dumps(result, indent=2))
+    print(json.dumps(result), flush=True)
     validate_probe(result['collector'], api)
     for name, trusted in [('wrongHostname', True), ('untrustedCertificate', False)]:
         with invalid_server(config, directory, trusted) as url:

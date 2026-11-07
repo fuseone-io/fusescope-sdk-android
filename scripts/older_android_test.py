@@ -17,6 +17,15 @@ class OlderAndroidTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 acceptance_transport.sample_runtime_properties()
 
+    @patch('older_android.subprocess.run')
+    def test_framework_readiness_does_not_depend_on_a_boot_flag(self, run):
+        from types import SimpleNamespace
+        from older_android import framework_ready
+        run.return_value = SimpleNamespace(returncode=1, stdout='')
+        self.assertFalse(framework_ready())
+        run.return_value = SimpleNamespace(returncode=0, stdout='package:/system/framework/framework-res.apk')
+        self.assertTrue(framework_ready())
+
     def test_probe_requires_expected_protocol_and_aead(self):
         from older_android import validate_probe
         validate_probe({'status': 405, 'protocol': 'TLSv1.2', 'cipher': 'TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256'}, 23)
