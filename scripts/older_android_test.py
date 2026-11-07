@@ -34,6 +34,13 @@ class OlderAndroidTest(unittest.TestCase):
             self.assertFalse(retryable_transport_failure({'error': error}))
         self.assertFalse(retryable_transport_failure({'protocol': 'TLSv1.2'}))
 
+    @patch('older_android.subprocess.run')
+    def test_probe_file_read_does_not_block_the_acceptance_deadline(self, run):
+        import subprocess
+        from older_android import read_probe_result
+        run.side_effect = subprocess.TimeoutExpired(['adb'], 5)
+        self.assertIsNone(read_probe_result())
+
     def test_probe_requires_expected_protocol_and_aead(self):
         from older_android import validate_probe
         validate_probe({'status': 405, 'protocol': 'TLSv1.2', 'cipher': 'TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256'}, 23)

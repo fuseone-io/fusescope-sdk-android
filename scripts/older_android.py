@@ -51,19 +51,19 @@ def validate_probe(probe, api):
     assert any(name in probe['cipher'] for name in ('GCM', 'CHACHA20_POLY1305')), probe
 
 
+def read_probe_result():
+    try:
+        process = subprocess.run(['adb', 'shell', 'run-as', PACKAGE, 'cat', 'files/tls-probe.json'], capture_output=True, text=True, timeout=5)
+        return json.loads(process.stdout)
+    except (json.JSONDecodeError, subprocess.TimeoutExpired):
+        return None
+
+
 def probe(url):
     adb('shell', 'run-as', PACKAGE, 'rm', '-f', 'files/tls-probe.json')
     started = adb('shell', 'am', 'start', '-W', '--activity-single-top', '-n', ACTIVITY, '--es', 'action', 'tls', '--es', 'probeUrl', url)
     print(started, flush=True)
-
-    def result():
-        proc = subprocess.run(['adb', 'shell', 'run-as', PACKAGE, 'cat', 'files/tls-probe.json'], capture_output=True, text=True)
-        try:
-            return json.loads(proc.stdout)
-        except json.JSONDecodeError:
-            return None
-
-    return wait_for(result, 'device TLS probe did not complete', 60)
+    return wait_for(read_probe_result, 'device TLS probe did not complete', 60)
 
 
 def framework_ready():

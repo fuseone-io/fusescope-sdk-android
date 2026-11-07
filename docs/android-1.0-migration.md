@@ -10,12 +10,13 @@ prepare and verify the release candidate. They do not announce availability.
 |---|---|
 | Android SDK, Compose, mappings plugin and plugin marker | One aligned release version: `1.0.0` |
 | Build toolchain | JDK 21, Gradle wrapper 9.7.1, AGP 9.4.0, Kotlin 2.4.10, compile SDK 37 |
-| Runtime | SDK/Compose minSdk 23; sample minSdk 26; real acceptance on emulator API 35 |
+| Runtime | SDK/Compose minSdk 23; normal sample minSdk 26; candidate acceptance on AOSP APIs 23, 28 and 35 with test-host minSdk 23 |
 | OpenTelemetry | Android 1.7.0 (including its 1.7.0-alpha modules), Java 1.65.0, instrumentation 2.31.1 |
 | Compose | Sample BOM 2026.09.00; no promise of compatibility with other compiler/toolchain combinations |
 
-MinSdk is an API floor, not an acceptance matrix: API 23–34 and 36+ have not been
-validated by the recorded emulator run. Below API 26, configure core-library desugaring.
+MinSdk is an API floor, not an acceptance matrix: the recorded source-candidate runs cover
+AOSP API 23, 28 and 35. Other API/device/provider variants were not directly tested.
+Below API 26, configure core-library desugaring.
 Keep `android.useFullClasspathForDexingTransform=true` as in the repository properties.
 Native recovery requires API 30 for exit metadata and API 31 for available tombstone
 frames. ELF/DWARF symbolication remains separate work (#188/#191).
@@ -73,8 +74,14 @@ fixture CA in its system store. No certificate or hostname verification is disab
 Native recovery runs only on the modern API-35 control; older devices still exercise
 sessions/views/Compose, consent/sampling, propagation/privacy and Java/ANR/R8.
 
-These are prepared checks, not device acceptance evidence yet; results are tracked
-in #337. Source-candidate success does not replace final published-Maven acceptance.
+Complete candidate runs passed on [API 23](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42398331995),
+[API 28](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42389543298)
+and [API 35](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/42389541041).
+All used collector 0.3.1 pinned by its recorded digest, source backend #313 and SDK
+source candidate 1.0.0. API 23/28 negotiated TLS 1.2 ECDHE-RSA/AES-128-GCM; API 35
+negotiated TLS 1.3/AES-128-GCM. Each rejected wrong-host/untrusted certificates and
+passed all scenarios, five consent cycles and UI checks. Native recovery was exercised
+on API 35 only. Source-candidate success does not replace published-Maven acceptance.
 
 ### Consent withdrawal correction
 

@@ -286,9 +286,8 @@ trusted by the consuming app. Do not disable certificate or hostname verificatio
 suites (`tls.min_version: "1.2"`) for stock Android API 23–28. TLS 1.3 remains the
 collector/chart default and is negotiated by capable modern clients. The public
 proxy must also accept TLS 1.2 for old clients; a proxy-to-collector hop can remain
-TLS 1.3. No additional SDK TLS provider is required. Real API 23/28 candidate
-acceptance is being validated under [#337](https://github.com/fuseone-io/fusescope/issues/337);
-minSdk 23 alone is not evidence of device compatibility.
+TLS 1.3. No additional SDK TLS provider is required. Source-candidate acceptance passed on AOSP APIs 23, 28 and 35 under [#337](https://github.com/fuseone-io/fusescope/issues/337);
+these are tested emulator results, not Maven 1.0 publication or a guarantee for untested device/provider variants.
 
 **Topology change:** server 0.159.0+ requires the new collector as RUM ingress
 (collector 0.3.1 is the current device-acceptance target). Older server minima above do not
