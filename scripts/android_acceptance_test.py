@@ -3,10 +3,15 @@
 import unittest
 from unittest.mock import patch
 
-from android_acceptance import app_process_id, sdk_report_ready, error, quiet, sampled_traceparent, session_ready, timeline_events
+from android_acceptance import crash_dialog_button, app_process_id, sdk_report_ready, error, quiet, sampled_traceparent, session_ready, timeline_events
 
 
 class AcceptanceOracleTest(unittest.TestCase):
+    def test_only_the_android_system_crash_button_is_acknowledged(self):
+        xml = '<hierarchy><node package="io.fuseone.fusescope.sample" resource-id="android:id/button1" bounds="[0,0][20,20]"/><node package="android" resource-id="android:id/button1" bounds="[100,200][300,400]"/></hierarchy>'
+        self.assertEqual((200, 300), crash_dialog_button(xml))
+        self.assertIsNone(crash_dialog_button('<hierarchy><node package="app" text="OK" bounds="[0,0][20,20]"/></hierarchy>'))
+
     @patch("android_acceptance.get")
     def test_sdk_identity_waits_for_the_collector_report(self, get):
         get.side_effect = [

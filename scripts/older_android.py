@@ -7,9 +7,41 @@ import pathlib
 import ssl
 import subprocess
 import threading
+import time
+import urllib.request
+import urllib.error
 
 from acceptance_transport import emulator_endpoint
 from native_smoke import ACTIVITY, PACKAGE, adb, wait_for
+
+
+def retryable_transport_failure(result):
+    return result.get('error') in ('ConnectException', 'SocketTimeoutException')
+
+
+def collector_probe(url, directory):
+    attempts = []
+    deadline = time.monotonic() + 45
+    while True:
+        result = probe(url)
+        attempts.append(result)
+        (directory / 'evidence' / 'device-tls-attempts.json').write_text(json.dumps(attempts, indent=2))
+        if not retryable_transport_failure(result) or time.monotonic() >= deadline:
+            return result
+        time.sleep(2)
+
+
+def verify_host_collector(config):
+    context = ssl.create_default_context(cafile=config['caCertFile'])
+    url = config['ingestionEndpoint'].rstrip('/') + '/rum/v1/traces'
+    try:
+        with urllib.request.urlopen(url, context=context, timeout=15) as response:
+            raise AssertionError(f'host RUM route returned unexpected status {response.status}')
+    except urllib.error.HTTPError as failure:
+        try:
+            assert failure.code == 405, f'host RUM route returned {failure.code}'
+        finally:
+            failure.close()
 
 
 def validate_probe(probe, api):
@@ -97,10 +129,11 @@ def invalid_server(config, directory, trusted):
 def verify(config, directory, api):
     actual = int(adb('shell', 'getprop', 'ro.build.version.sdk'))
     assert actual == api, f'wrong emulator: {actual}, expected {api}'
+    verify_host_collector(config)
     adb('install', '-r', 'sample/build/outputs/apk/debug/sample-debug.apk')
     adb('shell', 'pm', 'clear', PACKAGE)
     try:
-        result = {'api': actual, 'collector': probe(emulator_endpoint(config).rstrip('/') + '/rum/v1/traces')}
+        result = {'api': actual, 'collector': collector_probe(emulator_endpoint(config).rstrip('/') + '/rum/v1/traces', directory)}
     except Exception:
         crash = adb('logcat', '-d', '-s', 'AndroidRuntime:E')
         (directory / 'evidence' / 'device-crash.txt').write_text(crash)

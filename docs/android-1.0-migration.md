@@ -25,6 +25,7 @@ frames. ELF/DWARF symbolication remains separate work (#188/#191).
 | Existing Android sessions, views, errors and per-build mappings | Existing beta.3 contract: server 0.156.0+; see README for older beta constraints |
 | Native frames and grouping | Server 0.159.0-beta.2; accepted with published Maven beta.3 |
 | App-start storage | Accepted with published Maven beta.3 and server 0.159.0-beta.2 |
+| Android 1.0 setup support classification | Backend containing [PR #343](https://github.com/fuseone-io/fusescope/pull/343); stable 1.0.x range, **released minimum pending** |
 | App-start session timeline | Backend containing [PR #313](https://github.com/fuseone-io/fusescope/pull/313); accepted from source, **no released minimum version assigned yet** |
 
 The full [source-build acceptance](https://github.com/fuseone-io/fusescope-sdk-android/actions/runs/41763544558)
@@ -154,7 +155,7 @@ Central availability and final real-backend 1.0 acceptance are separate release 
 
 ## Release completion
 
-Merge SDK PR #9 and backend PR #313; publish a backend containing the latter. Then
+Merge SDK PR #9 and backend PRs #313/#343; publish a backend containing both. Then
 record its exact version/source/digest, update this table and the public Android guide,
 publish aligned 1.0 artifacts with the existing manual release workflow, run the
 Central consumer verifier, and dispatch full strict acceptance against those published

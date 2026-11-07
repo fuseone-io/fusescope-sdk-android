@@ -297,7 +297,9 @@ imply the ingest routes still exist on the backend in a newer release.
 The [Android 1.0 migration and compatibility guide](docs/android-1.0-migration.md)
 records the candidate toolchain, feature-specific backend requirements and aligned
 artifact verification. Version 1.0.0 is not published yet. App-start timeline support
-has passed source-build acceptance in backend PR #313; its backend release is pending.
+has passed source-build acceptance in backend PR #313; its backend release is pending. Android 1.0 setup support classification also needs
+[backend PR #343](https://github.com/fuseone-io/fusescope/pull/343), which recognizes
+the stable 1.0.x line; record the actual release containing both fixes before publication.
 
 ## Contributing
 

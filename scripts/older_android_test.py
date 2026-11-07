@@ -26,6 +26,14 @@ class OlderAndroidTest(unittest.TestCase):
         run.return_value = SimpleNamespace(returncode=0, stdout='package:/system/framework/framework-res.apk')
         self.assertTrue(framework_ready())
 
+    def test_retry_is_limited_to_transport_startup_errors(self):
+        from older_android import retryable_transport_failure
+        for error in ('ConnectException', 'SocketTimeoutException'):
+            self.assertTrue(retryable_transport_failure({'error': error}))
+        for error in ('SSLHandshakeException', 'SSLPeerUnverifiedException', 'SSLProtocolException'):
+            self.assertFalse(retryable_transport_failure({'error': error}))
+        self.assertFalse(retryable_transport_failure({'protocol': 'TLSv1.2'}))
+
     def test_probe_requires_expected_protocol_and_aead(self):
         from older_android import validate_probe
         validate_probe({'status': 405, 'protocol': 'TLSv1.2', 'cipher': 'TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256'}, 23)

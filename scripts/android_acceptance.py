@@ -148,6 +148,30 @@ def quiet(config: dict, expected_errors: int = 0, seconds: int = 30) -> None:
         time.sleep(2)
 
 
+def crash_dialog_button(xml):
+    for node in ET.fromstring(xml).iter("node"):
+        if node.get("package") != "android" or node.get("resource-id") != "android:id/button1":
+            continue
+        bounds = re.fullmatch(r"\[(\d+),(\d+)\]\[(\d+),(\d+)\]", node.get("bounds", ""))
+        if bounds:
+            x1, y1, x2, y2 = map(int, bounds.groups())
+            return ((x1 + x2) // 2, (y1 + y2) // 2)
+    return None
+
+
+def acknowledge_crash_dialog(directory):
+    def button():
+        adb("shell", "uiautomator", "dump", "/sdcard/fusescope-crash.xml")
+        xml = adb("shell", "cat", "/sdcard/fusescope-crash.xml")
+        point = crash_dialog_button(xml)
+        if point:
+            (directory / "evidence" / "java-crash-dialog.xml").write_text(xml)
+        return point
+
+    x, y = wait_for(button, "Android crash dialog was not available for acknowledgement", 30)
+    adb("shell", "input", "tap", str(x), str(y))
+
+
 def sdk_report_ready(config, version):
     status = get(config, "status")
     sdk = status.get("sdk", {})
@@ -223,8 +247,12 @@ def verify_full(config: dict, directory: pathlib.Path, calls: list, version: str
     pid = app_process_id()
     assert pid is not None, "sample was not running before the Java crash"
     launch("crash")
-    wait_for(lambda: app_process_id() != pid, "uncaught Java exception did not terminate the app")
     crashed = wait_for(lambda: error(config, "crash"), "uncaught Java crash did not reach FuseScope", 90)
+    if os.environ.get("ANDROID_API") == "23" and app_process_id() == pid:
+        # Marshmallow can hold the crashed process while the system's OK dialog
+        # awaits a user. The real backend crash above must exist before closing it.
+        acknowledge_crash_dialog(directory)
+    wait_for(lambda: app_process_id() != pid, "uncaught Java exception did not terminate the app")
     (directory / "evidence" / "java-crash.json").write_text(json.dumps(crashed, indent=2))
     event = crashed["latestEvents"][0]
     assert event["symbolicated"] and event["missingSourceMap"] is None
